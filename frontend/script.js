@@ -8,6 +8,8 @@
 // ---------------------------------------------------------------------------
 const API_BASE_URL = "https://ai-content-analyzer-4i6u.onrender.com";
 const ANALYZE_URL  = `${API_BASE_URL}/api/analyze/url`;
+const SESSIONS_URL = `${API_BASE_URL}/api/sessions`;
+const WORKSPACE_ID = "main-workspace";
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -16,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   let currentTheme    = 'dark';
   let activeTab       = 'youtube';
-  let activeSessionId = null;       // set after real analysis; null = demo only
+  let currentSessionId = null;      // real Supabase session currently open
+  let currentWorkspaceId = WORKSPACE_ID;
   let isAnalyzing     = false;      // duplicate-request guard
 
   // -------------------------------------------------------------------------
@@ -170,6 +173,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const settingOwnerInput = document.getElementById('settingOwnerInput');
   const clearHistoryBtn  = document.getElementById('clearHistoryBtn');
   const toastNotification = document.getElementById('toastNotification');
+  const sidebarHistoryList = document.getElementById('sidebarHistoryList');
+  const recentSessionsGrid = document.getElementById('recentSessionsGrid');
+  const sessionBadgeCount = document.getElementById('sessionBadgeCount');
+  const sessionsTitle = document.getElementById('sessionsTitle');
 
   // -------------------------------------------------------------------------
   // 1. Theme Management
@@ -303,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
       h.classList.toggle('active', h.dataset.id === sessionId);
     });
 
-    activeSessionId = sessionId;
+    currentSessionId = null; // demo sessions never use persistent chat
   }
 
   // -------------------------------------------------------------------------
@@ -433,16 +440,14 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMiniThumb.src       = thumbUrl;
     chatMiniMeta.innerText  = `🔴 YouTube • ${dateLabel}`;
 
-    // Chat: inform user real-chat comes next phase
-    setChatPlaceholder('Content chat will be connected in the next phase.');
-    chatInput.disabled  = true;
-    chatSendBtn.disabled = true;
+    setChatAvailable(Boolean(session.id));
+    clearChatMessages();
 
     // Clear sidebar active state (this is a new real session, not a demo item)
     document.querySelectorAll('.history-item').forEach(h => h.classList.remove('active'));
 
-    // Persist session id in runtime only
-    activeSessionId = session.id || null;
+    currentSessionId = session.id || null;
+    currentWorkspaceId = session.workspace_id || WORKSPACE_ID;
   }
 
   // -------------------------------------------------------------------------
@@ -475,33 +480,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function bindTimelineClicks() {
     document.querySelectorAll('.timeline-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const time  = item.dataset.time;
-        const topic = item.dataset.topic;
-        if (chatInput && !chatInput.disabled) {
-          appendUserMessage(`Explain the segment at ${time} regarding "${topic}".`);
-          setTimeout(() => {
-            appendAIMessage(`At <strong>${time}</strong>, the content covers "<em>${topic}</em>". Content chat will be fully connected in the next phase.`);
-          }, 600);
-        } else {
-          showToast(`Segment: ${time} — ${topic}`);
-        }
-      });
+      item.addEventListener('click', () => handleSendChat('Explain the segment at ' + item.dataset.time + ' regarding "' + item.dataset.topic + '".'));
     });
   }
 
   function bindEntityClicks() {
     document.querySelectorAll('.tag-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
-        if (chatInput && !chatInput.disabled) {
-          appendUserMessage(`Tell me more about ${pill.innerText}.`);
-          setTimeout(() => {
-            appendAIMessage(`"${pill.innerText}" is a key topic identified in this session. Content chat will be fully connected in the next phase.`);
-          }, 600);
-        } else {
-          showToast(`Topic: ${pill.innerText}`);
-        }
-      });
+      pill.addEventListener('click', () => handleSendChat('Tell me more about ' + pill.innerText + '.'));
     });
   }
 
@@ -537,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch(ANALYZE_URL, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url: youtubeUrl, workspace_id: 'main-workspace' }),
+        body:    JSON.stringify({ url: youtubeUrl, workspace_id: WORKSPACE_ID }),
         signal:  controller.signal
       });
 
@@ -632,6 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Tests 5 & 6: Render real Gemini response
       renderRealAnalysis(result.session, result.analysis);
+      await loadSessionMessages(result.session.id);
+      await loadRealSessions();
       showAnalysisView();
       showToast('✅ Analysis complete!');
 
@@ -671,18 +658,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   navNewAnalysisBtn.addEventListener('click', () => {
     urlInputField.value = '';
-    // Re-enable chat if it was disabled by a real analysis
-    if (chatInput)    chatInput.disabled   = false;
-    if (chatSendBtn)  chatSendBtn.disabled = false;
-    setChatPlaceholder('Ask anything about this content...');
+    currentSessionId = null;
+    clearChatMessages();
+    setChatAvailable(false);
     showHomeView();
     showToast('Started new analysis session');
   });
 
   navHome.addEventListener('click', showHomeView);
 
-  navSessions.addEventListener('click', () => {
+  navSessions.addEventListener('click', async () => {
     showHomeView();
+    try { await loadRealSessions(); } catch (error) { showToast('Error: ' + error.message, true); }
     document.getElementById('recentSessionsGrid').scrollIntoView({ behavior: 'smooth' });
     setActiveNav(navSessions);
   });
@@ -748,86 +735,135 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 13. Sidebar History & Recent Session Cards (demo sessions only)
+  // 13. Real Session History
   // -------------------------------------------------------------------------
-  document.querySelectorAll('.history-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const sessionId = item.dataset.id;
-      // Re-enable chat for demo sessions
-      if (chatInput)    chatInput.disabled   = false;
-      if (chatSendBtn)  chatSendBtn.disabled = false;
-      renderMockSessionData(sessionId);
-      showAnalysisView();
-      showToast(`Loaded: ${item.innerText.trim()}`);
-    });
-  });
+  function sourceBadge(sourceType) {
+    return sourceType === 'youtube' ? 'YouTube' : (sourceType || 'Content');
+  }
 
-  document.querySelectorAll('.session-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const sessionId = card.dataset.id;
-      // Re-enable chat for demo sessions
-      if (chatInput)    chatInput.disabled   = false;
-      if (chatSendBtn)  chatSendBtn.disabled = false;
-      renderMockSessionData(sessionId);
+  function renderRealSessions(sessions) {
+    sessionBadgeCount.innerText = String(sessions.length);
+    sessionsTitle.innerText = 'Real Sessions';
+    if (!sessions.length) {
+      sidebarHistoryList.innerHTML = '<div class="history-item">No real sessions yet</div>';
+      recentSessionsGrid.innerHTML = '<p style="color:var(--text-muted);font-size:14px;">No real sessions yet. Analyze a public YouTube video to create one.</p>';
+      return;
+    }
+    sidebarHistoryList.innerHTML = sessions.map(session => `<button class="history-item ${session.id === currentSessionId ? 'active' : ''}" data-real-session-id="${escapeHTML(session.id)}" type="button">${escapeHTML(session.title || 'Untitled content')}</button>`).join('');
+    recentSessionsGrid.innerHTML = sessions.map(session => `<button class="session-card" data-real-session-id="${escapeHTML(session.id)}" type="button"><div class="session-info"><h4>${escapeHTML(session.title || 'Untitled content')}</h4><div class="session-meta"><span class="source-badge youtube">${escapeHTML(sourceBadge(session.source_type))}</span><span>${escapeHTML(formatDate(session.created_at || session.updated_at || ''))}</span></div><div class="session-meta"><span>${escapeHTML(session.status || 'completed')}</span></div></div></button>`).join('');
+    document.querySelectorAll('[data-real-session-id]').forEach(item => item.addEventListener('click', () => openRealSession(item.dataset.realSessionId)));
+  }
+
+  async function loadRealSessions() {
+    const data = await callSessionAPI(`?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`);
+    renderRealSessions(data.sessions);
+  }
+
+  async function openRealSession(sessionId) {
+    try {
+      const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}`);
+      renderRealAnalysis(data.session, data.analysis);
+      await loadSessionMessages(sessionId);
+      await loadRealSessions();
       showAnalysisView();
-      showToast('Opened demo session');
-    });
-  });
+    } catch (error) {
+      showToast(`Error: ${error.message}`, true);
+    }
+  }
 
   // -------------------------------------------------------------------------
-  // 14. Chat Panel (Mock — will be replaced in next phase)
+  // 14. Persistent Session Chat
   // -------------------------------------------------------------------------
-  function appendUserMessage(text) {
+  function clearChatMessages() {
+    chatMessagesStream.innerHTML = '';
+  }
+
+  function formatChatTime(isoString) {
+    const date = new Date(isoString);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function appendMessage(role, text, createdAt = new Date().toISOString()) {
     const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble user';
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    bubble.innerHTML = `<p>${escapeHTML(text)}</p><div class="bubble-time">${now} ✓</div>`;
+    bubble.className = `chat-bubble ${role === 'user' ? 'user' : 'assistant'}`;
+    bubble.innerHTML = `<p>${escapeHTML(text)}</p><div class="bubble-time">${formatChatTime(createdAt)}${role === 'user' ? ' sent' : ''}</div>`;
     chatMessagesStream.appendChild(bubble);
     chatMessagesStream.scrollTop = chatMessagesStream.scrollHeight;
   }
 
-  function appendAIMessage(htmlText) {
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble assistant';
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    bubble.innerHTML = `<p>${htmlText}</p><div class="bubble-time">${now}</div>`;
-    chatMessagesStream.appendChild(bubble);
+  function appendUserMessage(text, createdAt) { appendMessage('user', text, createdAt); }
+  function appendAIMessage(text, createdAt) { appendMessage('assistant', text, createdAt); }
+
+  function showTypingState() {
+    const typing = document.createElement('div');
+    typing.className = 'chat-bubble assistant';
+    typing.id = 'chatTypingState';
+    typing.innerHTML = '<p>Gemini is thinking...</p>';
+    chatMessagesStream.appendChild(typing);
     chatMessagesStream.scrollTop = chatMessagesStream.scrollHeight;
   }
 
-  function handleSendChat() {
-    if (chatInput.disabled) return;
-    const msg = chatInput.value.trim();
-    if (!msg) return;
+  function removeTypingState() { document.getElementById('chatTypingState')?.remove(); }
 
-    appendUserMessage(msg);
+  function setChatAvailable(available) {
+    chatInput.disabled = !available;
+    chatSendBtn.disabled = !available;
+    setChatPlaceholder(available ? 'Ask anything about this content...' : 'Analyze or open a real session to chat.');
+  }
+
+  async function callSessionAPI(path, options = {}) {
+    const response = await fetch(`${SESSIONS_URL}${path}`, options);
+    let data;
+    try { data = await response.json(); } catch { throw new Error('Server returned an invalid response.'); }
+    if (!response.ok || data.status !== 'ok') {
+      const messages = {
+        INVALID_SESSION_ID: 'This session link is invalid.',
+        SESSION_NOT_FOUND: 'This session no longer exists.',
+        INVALID_MESSAGE: 'Please enter a message before sending.',
+        DATABASE_ERROR: 'Session storage is temporarily unavailable.',
+        CHAT_FAILED: 'Gemini could not answer right now. Please try again.'
+      };
+      throw new Error(messages[data.code] || data.message || 'Unable to complete the session request.');
+    }
+    return data;
+  }
+
+  async function loadSessionMessages(sessionId) {
+    if (!sessionId) return;
+    const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}/messages`);
+    clearChatMessages();
+    data.messages.forEach(message => appendMessage(message.role, message.content, message.created_at));
+  }
+
+  async function handleSendChat(messageOverride = null) {
+    const message = (messageOverride || chatInput.value).trim();
+    if (!currentSessionId) return showToast('Open a real session before starting a chat.', true);
+    if (!message) return showToast('Please enter a message.', true);
+
+    appendUserMessage(message);
     chatInput.value = '';
-
-    setTimeout(() => {
-      const lower = msg.toLowerCase();
-      let reply = 'I analyzed this session. Content chat will be fully connected in the next phase.';
-      if (lower.includes('main idea') || lower.includes('summary')) {
-        reply = 'The main idea is captured in the Overview section above. Full chat coming next phase!';
-      } else if (lower.includes('who') || lower.includes('abdallah')) {
-        reply = 'Hello Abdallah! I am ready to answer detailed questions once real chat is connected.';
-      } else if (lower.includes('timeline') || lower.includes('timestamp')) {
-        reply = 'Click any timeline row to ask about a specific segment! Full chat integration coming next phase.';
-      }
-      appendAIMessage(reply);
-    }, 600);
+    chatInput.disabled = true;
+    chatSendBtn.disabled = true;
+    showTypingState();
+    try {
+      const data = await callSessionAPI(`/${encodeURIComponent(currentSessionId)}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      removeTypingState();
+      appendAIMessage(data.message.content, data.message.created_at);
+    } catch (error) {
+      removeTypingState();
+      showToast(`Error: ${error.message}`, true);
+    } finally {
+      setChatAvailable(Boolean(currentSessionId));
+      chatInput.focus();
+    }
   }
 
-  chatSendBtn.addEventListener('click', handleSendChat);
-  chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleSendChat(); });
-
-  chatExpandBtn.addEventListener('click', () => {
-    chatPanel.classList.toggle('expanded');
-    showToast(chatPanel.classList.contains('expanded') ? 'Expanded chat view' : 'Standard chat view');
-  });
-
-  chatAttachBtn.addEventListener('click', () => {
-    showToast('📎 Attachment upload coming in a later phase.');
-  });
+  chatSendBtn.addEventListener('click', () => handleSendChat());
+  chatInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); handleSendChat(); } });
 
   // -------------------------------------------------------------------------
   // 15. Modal System
@@ -855,6 +891,9 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal();
     showHomeView();
   });
+
+  loadRealSessions().catch(() => { /* Rendered demo content stays visible only while the API is unavailable. */ });
+  setChatAvailable(false);
 
   // -------------------------------------------------------------------------
   // 16. Spinner CSS (injected so no stylesheet change needed)

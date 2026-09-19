@@ -20,7 +20,7 @@ function isYouTubeUrl(url) {
 }
 
 router.post("/api/analyze/url", async (req, res) => {
-  const { url, analysis_mode = "full", workspace_id = "default-workspace" } = req.body || {};
+  const { url, analysis_mode = "full", workspace_id = "main-workspace" } = req.body || {};
 
   if (!url) {
     return res.status(400).json({

@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import healthRouter from "./health.js";
 import analyzeRouter from "./routes/analyze.js";
+import sessionsRouter from "./routes/sessions.js";
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ app.use(express.json());
 
 app.use("/", healthRouter);
 app.use("/", analyzeRouter);
+app.use("/", sessionsRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

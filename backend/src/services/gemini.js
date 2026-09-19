@@ -15,6 +15,54 @@ function normalizeSchema(data) {
   };
 }
 
+export async function answerSessionQuestion(session, previousMessages, message) {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw { code: "GEMINI_KEY_MISSING", message: "GEMINI_API_KEY environment variable is not configured." };
+  }
+
+  const analysis = session.analysis || {};
+  const conversation = previousMessages.map(({ role, content }) => ({ role, content }));
+  const context = {
+    source_url: session.source_url,
+    source_type: session.source_type,
+    title: session.title,
+    overview: analysis.overview,
+    key_points: analysis.key_points,
+    timeline: analysis.timeline,
+    speech_analysis: analysis.speech_analysis,
+    visual_analysis: analysis.visual_analysis,
+    structure: analysis.structure,
+    evidence_notes: analysis.evidence_notes,
+    entities: analysis.entities,
+    uncertainties: analysis.uncertainties,
+    previous_conversation: conversation,
+  };
+
+  const prompt = `You are answering a question about one analyzed content session. Answer primarily from the session context below. Do not invent facts, timestamps, or details absent from the context. If the context is insufficient, say so clearly. Use timestamps only when they appear in the provided timeline. Keep the answer natural and helpful.\n\nSession context:\n${JSON.stringify(context)}\n\nUser question:\n${message}`;
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: prompt,
+    });
+    const answer = response.text ? response.text.trim() : "";
+
+    if (!answer) {
+      throw { code: "GEMINI_REQUEST_FAILED", message: "Gemini returned an empty chat response." };
+    }
+
+    return answer;
+  } catch (error) {
+    console.error("[gemini] Error answering session question:", error.message || error);
+    let safeMessage = error.message || "An error occurred while contacting Gemini API.";
+    safeMessage = safeMessage.replaceAll(apiKey, "[REDACTED]");
+    throw { code: error.code || "GEMINI_REQUEST_FAILED", message: safeMessage };
+  }
+}
+
 export async function analyzeYouTubeVideo(url, analysisMode = "full") {
   const apiKey = process.env.GEMINI_API_KEY;
 
