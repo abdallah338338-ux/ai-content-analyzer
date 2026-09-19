@@ -62,7 +62,7 @@ IMPORTANT: Respond ONLY with valid raw JSON. Do not include markdown code fence 
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: prompt,
     });
 
