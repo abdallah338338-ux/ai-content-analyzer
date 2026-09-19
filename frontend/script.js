@@ -1,10 +1,27 @@
 /* ==========================================================================
    AI CONTENT ANALYZER - COMPLETE INTERACTIVE FRONTEND LOGIC
-   Fully Functional Prototype (Dark/Light Modes, Modals, Tabs, Dynamic Data)
+   Phase 4 — Frontend ↔ Backend Integration (YouTube Real Analysis)
    ========================================================================== */
 
+// ---------------------------------------------------------------------------
+// API CONFIG — single source of truth, no credentials here
+// ---------------------------------------------------------------------------
+const API_BASE_URL = "https://ai-content-analyzer-4i6u.onrender.com";
+const ANALYZE_URL  = `${API_BASE_URL}/api/analyze/url`;
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Mock Dataset for Sessions
+
+  // -------------------------------------------------------------------------
+  // Runtime State
+  // -------------------------------------------------------------------------
+  let currentTheme    = 'dark';
+  let activeTab       = 'youtube';
+  let activeSessionId = null;       // set after real analysis; null = demo only
+  let isAnalyzing     = false;      // duplicate-request guard
+
+  // -------------------------------------------------------------------------
+  // Mock Dataset — kept for sidebar demo history; NEVER shown after real API
+  // -------------------------------------------------------------------------
   const SESSIONS_DATA = {
     'session-1': {
       title: 'How Black Holes Work',
@@ -12,11 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
       badgeText: '🔴 YouTube',
       date: 'May 12, 2024 • 18:42',
       image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&q=80',
-      overview: 'The video explains what black holes are, how massive stellar collapse forms them, and the physics governing the event horizon. It breaks down complex astrophysics concepts using clear visual simulations.',
+      overview: 'The video explains what black holes are, how massive stellar collapse forms them, and the physics governing the event horizon.',
       keyPoints: [
         '<strong>Stellar Core Collapse:</strong> Supermassive stars collapse under intense gravity when nuclear fusion ceases.',
         '<strong>Event Horizon:</strong> The boundary where escape velocity exceeds light speed.',
-        '<strong>Accretion Disk Dynamics:</strong> Superheated gas and dust orbiting the black hole glow brightly in X-ray spectrums.'
+        '<strong>Accretion Disk Dynamics:</strong> Superheated gas and dust orbiting the black hole glow in X-ray spectrums.'
       ],
       timeline: [
         { time: '00:00 — 02:15', title: 'Introduction to Gravitational Collapse', desc: 'Overview of massive stars before stellar death.' },
@@ -24,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { time: '06:40 — 12:10', title: 'Accretion Disks and Relativistic Jets', desc: 'How superheated matter emits high-energy X-rays.' }
       ],
       speech: 'Narration is paced clearly with precise astrophysics terminology. Analogies like "trampoline bowling balls" are used.',
-      visual: 'Combines 3D ray-tracing simulations with infrared telescope captures. High-contrast diagrams highlight photon spheres.',
+      visual: 'Combines 3D ray-tracing simulations with infrared telescope captures.',
       entities: ['General Relativity', 'Schwarzschild Radius', 'Event Horizon Telescope', 'Accretion Disk', 'Hawking Radiation']
     },
     'session-2': {
@@ -88,74 +105,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // State Management
-  let currentTheme = 'dark';
-  let activeTab = 'youtube';
-  let activeSessionId = 'session-1';
-
+  // -------------------------------------------------------------------------
   // DOM Handles
-  const app = document.getElementById('app');
-  const sidebar = document.getElementById('sidebar');
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  // -------------------------------------------------------------------------
+  const app              = document.getElementById('app');
+  const sidebar          = document.getElementById('sidebar');
+  const mobileMenuBtn    = document.getElementById('mobileMenuBtn');
   const themeToggleLight = document.getElementById('themeToggleLight');
-  const themeToggleDark = document.getElementById('themeToggleDark');
-  const userProfileBtn = document.getElementById('userProfileBtn');
+  const themeToggleDark  = document.getElementById('themeToggleDark');
+  const userProfileBtn   = document.getElementById('userProfileBtn');
 
-  // Navigation Items
   const navNewAnalysisBtn = document.getElementById('navNewAnalysisBtn');
-  const navHome = document.getElementById('navHome');
-  const navSessions = document.getElementById('navSessions');
-  const navFavorites = document.getElementById('navFavorites');
-  const navSettings = document.getElementById('navSettings');
-  const viewAllLink = document.getElementById('viewAllLink');
+  const navHome           = document.getElementById('navHome');
+  const navSessions       = document.getElementById('navSessions');
+  const navFavorites      = document.getElementById('navFavorites');
+  const navSettings       = document.getElementById('navSettings');
+  const viewAllLink       = document.getElementById('viewAllLink');
 
-  // Views
-  const viewHome = document.getElementById('viewHome');
-  const viewLoading = document.getElementById('viewLoading');
+  const viewHome     = document.getElementById('viewHome');
+  const viewLoading  = document.getElementById('viewLoading');
   const viewAnalysis = document.getElementById('viewAnalysis');
-  const chatPanel = document.getElementById('chatPanel');
+  const chatPanel    = document.getElementById('chatPanel');
 
-  // Input & Dropzone
-  const sourceTabs = document.querySelectorAll('.tab-btn');
-  const inputActionCard = document.getElementById('inputActionCard');
-  const urlInputField = document.getElementById('urlInputField');
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  const imageDropzone = document.getElementById('imageDropzone');
+  const sourceTabs     = document.querySelectorAll('.tab-btn');
+  const inputActionCard  = document.getElementById('inputActionCard');
+  const urlInputField  = document.getElementById('urlInputField');
+  const analyzeBtn     = document.getElementById('analyzeBtn');
+  const imageDropzone  = document.getElementById('imageDropzone');
   const imageFileInput = document.getElementById('imageFileInput');
-  const dropzoneText = document.getElementById('dropzoneText');
+  const dropzoneText   = document.getElementById('dropzoneText');
 
-  // Dynamic Analysis View Elements
   const sessionHeaderTitle = document.getElementById('sessionHeaderTitle');
-  const sessionHeaderDesc = document.getElementById('sessionHeaderDesc');
+  const sessionHeaderDesc  = document.getElementById('sessionHeaderDesc');
   const sessionHeaderImage = document.getElementById('sessionHeaderImage');
   const sessionHeaderBadge = document.getElementById('sessionHeaderBadge');
-  const sessionHeaderDate = document.getElementById('sessionHeaderDate');
-  const analysisOverview = document.getElementById('analysisOverview');
-  const analysisKeyPoints = document.getElementById('analysisKeyPoints');
-  const analysisTimeline = document.getElementById('analysisTimeline');
-  const analysisSpeech = document.getElementById('analysisSpeech');
-  const analysisVisual = document.getElementById('analysisVisual');
-  const analysisEntities = document.getElementById('analysisEntities');
+  const sessionHeaderDate  = document.getElementById('sessionHeaderDate');
+  const analysisOverview   = document.getElementById('analysisOverview');
+  const analysisKeyPoints  = document.getElementById('analysisKeyPoints');
+  const analysisTimeline   = document.getElementById('analysisTimeline');
+  const analysisSpeech     = document.getElementById('analysisSpeech');
+  const analysisVisual     = document.getElementById('analysisVisual');
+  const analysisEntities   = document.getElementById('analysisEntities');
 
-  // Chat Elements
-  const chatMiniTitle = document.getElementById('chatMiniTitle');
-  const chatMiniThumb = document.getElementById('chatMiniThumb');
-  const chatMiniMeta = document.getElementById('chatMiniMeta');
+  // New optional sections
+  const blockStructure      = document.getElementById('blockStructure');
+  const analysisStructure   = document.getElementById('analysisStructure');
+  const blockEvidence       = document.getElementById('blockEvidence');
+  const analysisEvidence    = document.getElementById('analysisEvidence');
+  const blockUncertainties  = document.getElementById('blockUncertainties');
+  const analysisUncertainties = document.getElementById('analysisUncertainties');
+
+  const chatMiniTitle      = document.getElementById('chatMiniTitle');
+  const chatMiniThumb      = document.getElementById('chatMiniThumb');
+  const chatMiniMeta       = document.getElementById('chatMiniMeta');
   const chatMessagesStream = document.getElementById('chatMessagesStream');
-  const chatInput = document.getElementById('chatInput');
-  const chatSendBtn = document.getElementById('chatSendBtn');
-  const chatExpandBtn = document.getElementById('chatExpandBtn');
-  const chatAttachBtn = document.getElementById('chatAttachBtn');
+  const chatInput          = document.getElementById('chatInput');
+  const chatSendBtn        = document.getElementById('chatSendBtn');
+  const chatExpandBtn      = document.getElementById('chatExpandBtn');
+  const chatAttachBtn      = document.getElementById('chatAttachBtn');
 
-  // Modals & Toasts
-  const modalBackdrop = document.getElementById('modalBackdrop');
-  const modalCloseBtn = document.getElementById('modalCloseBtn');
-  const modalTitle = document.getElementById('modalTitle');
+  const modalBackdrop    = document.getElementById('modalBackdrop');
+  const modalCloseBtn    = document.getElementById('modalCloseBtn');
+  const modalTitle       = document.getElementById('modalTitle');
   const settingOwnerInput = document.getElementById('settingOwnerInput');
-  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const clearHistoryBtn  = document.getElementById('clearHistoryBtn');
   const toastNotification = document.getElementById('toastNotification');
 
-  // --- 1. Theme Management ---
+  // -------------------------------------------------------------------------
+  // 1. Theme Management
+  // -------------------------------------------------------------------------
   function setTheme(theme) {
     currentTheme = theme;
     document.documentElement.setAttribute('data-theme', theme);
@@ -168,26 +186,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  themeToggleDark.addEventListener('click', () => {
-    setTheme('dark');
-    showToast('Switched to Dark Theme');
-  });
-  
-  themeToggleLight.addEventListener('click', () => {
-    setTheme('light');
-    showToast('Switched to Light Theme');
-  });
+  themeToggleDark.addEventListener('click', () => { setTheme('dark'); showToast('Switched to Dark Theme'); });
+  themeToggleLight.addEventListener('click', () => { setTheme('light'); showToast('Switched to Light Theme'); });
 
-  // --- 2. Toast System ---
-  function showToast(message) {
+  // -------------------------------------------------------------------------
+  // 2. Toast System
+  // -------------------------------------------------------------------------
+  let toastTimer = null;
+  function showToast(message, isError = false) {
+    if (toastTimer) clearTimeout(toastTimer);
     toastNotification.innerText = message;
     toastNotification.style.display = 'block';
-    setTimeout(() => {
+    toastNotification.style.background = isError
+      ? 'linear-gradient(135deg, #7f1d1d, #991b1b)'
+      : '';
+    toastTimer = setTimeout(() => {
       toastNotification.style.display = 'none';
-    }, 2500);
+    }, isError ? 4000 : 2500);
   }
 
-  // --- 3. View Switcher ---
+  // -------------------------------------------------------------------------
+  // 3. View Switcher
+  // -------------------------------------------------------------------------
   function setActiveNav(activeBtn) {
     [navHome, navSessions, navFavorites, navSettings].forEach(nav => nav && nav.classList.remove('active'));
     if (activeBtn) activeBtn.classList.add('active');
@@ -203,38 +223,45 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.innerWidth <= 768) sidebar.classList.remove('open');
   }
 
-  function showLoadingView(onComplete) {
+  function showLoadingView() {
     viewHome.style.display = 'none';
     viewLoading.classList.add('active');
     viewAnalysis.classList.remove('active');
     app.classList.remove('has-chat-panel');
     chatPanel.style.display = 'none';
 
+    // Animate loading steps as visual progress (backend/Gemini does the real work)
     const steps = document.querySelectorAll('.loading-step-item');
-    steps.forEach(step => step.classList.remove('done', 'active'));
-
+    steps.forEach(s => s.classList.remove('done', 'active'));
     if (steps[0]) steps[0].classList.add('active');
-    setTimeout(() => { if (steps[0]) steps[0].classList.replace('active', 'done'); if (steps[1]) steps[1].classList.add('active'); }, 500);
-    setTimeout(() => { if (steps[1]) steps[1].classList.replace('active', 'done'); if (steps[2]) steps[2].classList.add('active'); }, 1000);
-    setTimeout(() => { if (steps[2]) steps[2].classList.replace('active', 'done'); if (steps[3]) steps[3].classList.add('active'); }, 1500);
-    setTimeout(() => {
-      if (onComplete) onComplete();
-    }, 2000);
+    setTimeout(() => { if (steps[0]) { steps[0].classList.replace('active','done'); } if (steps[1]) steps[1].classList.add('active'); }, 800);
+    setTimeout(() => { if (steps[1]) { steps[1].classList.replace('active','done'); } if (steps[2]) steps[2].classList.add('active'); }, 1800);
+    setTimeout(() => { if (steps[2]) { steps[2].classList.replace('active','done'); } if (steps[3]) steps[3].classList.add('active'); }, 3000);
   }
 
-  function renderSessionData(sessionId) {
-    activeSessionId = sessionId;
+  function showAnalysisView() {
+    viewHome.style.display = 'none';
+    viewLoading.classList.remove('active');
+    viewAnalysis.classList.add('active');
+    app.classList.add('has-chat-panel');
+    chatPanel.style.display = 'flex';
+    if (window.innerWidth <= 768) sidebar.classList.remove('open');
+  }
+
+  // -------------------------------------------------------------------------
+  // 4. Render MOCK session (sidebar demo history items only)
+  // -------------------------------------------------------------------------
+  function renderMockSessionData(sessionId) {
     const data = SESSIONS_DATA[sessionId] || SESSIONS_DATA['session-1'];
 
     sessionHeaderTitle.innerText = data.title;
-    sessionHeaderDesc.innerText = data.overview;
-    sessionHeaderImage.src = data.image;
+    sessionHeaderDesc.innerText  = data.overview;
+    sessionHeaderImage.src       = data.image;
     sessionHeaderBadge.className = `source-badge ${data.badgeClass}`;
     sessionHeaderBadge.innerText = data.badgeText;
-    sessionHeaderDate.innerText = data.date;
-    analysisOverview.innerText = data.overview;
+    sessionHeaderDate.innerText  = data.date;
+    analysisOverview.innerText   = data.overview;
 
-    // Key points
     analysisKeyPoints.innerHTML = data.keyPoints.map(kp => `
       <li class="key-point-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -242,7 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </li>
     `).join('');
 
-    // Timeline
     analysisTimeline.innerHTML = data.timeline.map(t => `
       <div class="timeline-item" data-time="${t.time}" data-topic="${escapeHTML(t.title)}">
         <span class="timestamp-tag">${t.time}</span>
@@ -252,64 +278,409 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
     `).join('');
+    bindTimelineClicks();
 
-    // Re-bind timeline clicks
-    document.querySelectorAll('.timeline-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const time = item.dataset.time;
-        const topic = item.dataset.topic;
-        appendUserMessage(`Explain the segment at ${time} regarding "${topic}".`);
-        setTimeout(() => {
-          appendAIMessage(`At ${time}, the content covers "${topic}". The analysis shows high confidence key insights.`);
-        }, 600);
-      });
-    });
-
-    // Speech & Visual
     analysisSpeech.innerText = data.speech;
-    analysisVisual.innerText = data.visual;
+    analysisVisual.innerText  = data.visual;
 
-    // Entities
     analysisEntities.innerHTML = data.entities.map(e => `<span class="tag-pill">${e}</span>`).join('');
-    document.querySelectorAll('.tag-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
-        appendUserMessage(`Tell me more about ${pill.innerText}.`);
-        setTimeout(() => {
-          appendAIMessage(`"${pill.innerText}" is a key topic identified in this session's knowledge memory.`);
-        }, 600);
-      });
-    });
+    bindEntityClicks();
 
-    // Chat Mini Badge
+    // Hide real-only sections
+    blockStructure.style.display     = 'none';
+    blockEvidence.style.display      = 'none';
+    blockUncertainties.style.display = 'none';
+
+    // Chat mini badge
     chatMiniTitle.innerText = data.title;
-    chatMiniThumb.src = data.image;
-    chatMiniMeta.innerText = `${data.badgeText} • ${data.date}`;
+    chatMiniThumb.src       = data.image;
+    chatMiniMeta.innerText  = `${data.badgeText} • ${data.date}`;
 
-    // Highlight sidebar history item
+    // Restore placeholder chat input (mock context)
+    setChatPlaceholder('Ask anything about this content...');
+
     document.querySelectorAll('.history-item').forEach(h => {
       h.classList.toggle('active', h.dataset.id === sessionId);
     });
+
+    activeSessionId = sessionId;
   }
 
-  function showAnalysisView(sessionId = 'session-1') {
-    renderSessionData(sessionId);
-    viewHome.style.display = 'none';
-    viewLoading.classList.remove('active');
-    viewAnalysis.classList.add('active');
-    app.classList.add('has-chat-panel');
-    chatPanel.style.display = 'flex';
-    if (window.innerWidth <= 768) sidebar.classList.remove('open');
+  // -------------------------------------------------------------------------
+  // 5. Render REAL API Analysis
+  // -------------------------------------------------------------------------
+  function renderRealAnalysis(session, analysis) {
+    // — Session Header —
+    const title       = analysis.title || session.title || 'YouTube Video Analysis';
+    const sourceUrl   = session.source_url || '';
+    const createdRaw  = session.created_at  || new Date().toISOString();
+    const dateLabel   = formatDate(createdRaw);
+    const thumbUrl    = getYouTubeThumbnail(sourceUrl);
+
+    sessionHeaderTitle.innerText  = title;
+    sessionHeaderDesc.innerText   = analysis.overview || '';
+    sessionHeaderImage.src        = thumbUrl;
+    sessionHeaderBadge.className  = 'source-badge youtube';
+    sessionHeaderBadge.innerText  = '🔴 YouTube';
+    sessionHeaderDate.innerText   = dateLabel;
+
+    // — Overview —
+    analysisOverview.innerText = analysis.overview || 'No overview returned.';
+
+    // — Key Points —
+    const kps = Array.isArray(analysis.key_points) ? analysis.key_points : [];
+    if (kps.length > 0) {
+      analysisKeyPoints.innerHTML = kps.map(kp => `
+        <li class="key-point-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>${escapeHTML(typeof kp === 'string' ? kp : JSON.stringify(kp))}</span>
+        </li>
+      `).join('');
+    } else {
+      analysisKeyPoints.innerHTML = '<li class="key-point-item" style="opacity:0.6;"><span>No key points returned by Gemini.</span></li>';
+    }
+
+    // — Timeline —
+    const tl = Array.isArray(analysis.timeline) ? analysis.timeline : [];
+    if (tl.length > 0) {
+      analysisTimeline.innerHTML = tl.map(t => {
+        const timeLabel = t.start && t.end ? `${t.start} — ${t.end}` : (t.time || '');
+        const topicStr  = escapeHTML(t.topic || '');
+        const summStr   = escapeHTML(t.summary || t.desc || '');
+        return `
+          <div class="timeline-item" data-time="${escapeHTML(timeLabel)}" data-topic="${topicStr}">
+            <span class="timestamp-tag">${escapeHTML(timeLabel)}</span>
+            <div class="timeline-content">
+              <h5>${topicStr}</h5>
+              <p>${summStr}</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      analysisTimeline.innerHTML = `
+        <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">
+          No timeline segments returned for this video.
+        </div>`;
+    }
+    bindTimelineClicks();
+
+    // — Speech Analysis —
+    const speech = analysis.speech_analysis;
+    analysisSpeech.innerText = typeof speech === 'object' && speech !== null
+      ? (speech.summary || speech.tone || JSON.stringify(speech))
+      : (speech || 'No speech analysis returned.');
+
+    // — Visual Analysis —
+    const visual = analysis.visual_analysis;
+    analysisVisual.innerText = typeof visual === 'object' && visual !== null
+      ? (visual.summary || visual.description || JSON.stringify(visual))
+      : (visual || 'No visual analysis returned.');
+
+    // — Entities —
+    let entities = [];
+    if (Array.isArray(analysis.entities)) {
+      entities = analysis.entities.map(e => typeof e === 'string' ? e : (e.name || JSON.stringify(e)));
+    }
+    if (entities.length > 0) {
+      analysisEntities.innerHTML = entities.map(e => `<span class="tag-pill">${escapeHTML(e)}</span>`).join('');
+    } else {
+      analysisEntities.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">No entities identified.</span>';
+    }
+    bindEntityClicks();
+
+    // — Content Structure (optional) —
+    const structure = analysis.structure;
+    if (structure) {
+      analysisStructure.innerText = typeof structure === 'object'
+        ? JSON.stringify(structure, null, 2)
+        : structure;
+      blockStructure.style.display = 'block';
+    } else {
+      blockStructure.style.display = 'none';
+    }
+
+    // — Evidence Notes (optional) —
+    const evidence = Array.isArray(analysis.evidence_notes) ? analysis.evidence_notes : [];
+    if (evidence.length > 0) {
+      analysisEvidence.innerHTML = evidence.map(e => `
+        <li class="key-point-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>${escapeHTML(typeof e === 'string' ? e : JSON.stringify(e))}</span>
+        </li>
+      `).join('');
+      blockEvidence.style.display = 'block';
+    } else {
+      blockEvidence.style.display = 'none';
+    }
+
+    // — Uncertainties (optional) —
+    const uncertainties = Array.isArray(analysis.uncertainties) ? analysis.uncertainties : [];
+    if (uncertainties.length > 0) {
+      analysisUncertainties.innerHTML = uncertainties.map(u => `
+        <li class="key-point-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <span>${escapeHTML(typeof u === 'string' ? u : JSON.stringify(u))}</span>
+        </li>
+      `).join('');
+      blockUncertainties.style.display = 'block';
+    } else {
+      blockUncertainties.style.display = 'none';
+    }
+
+    // — Chat Mini Badge —
+    chatMiniTitle.innerText = title;
+    chatMiniThumb.src       = thumbUrl;
+    chatMiniMeta.innerText  = `🔴 YouTube • ${dateLabel}`;
+
+    // Chat: inform user real-chat comes next phase
+    setChatPlaceholder('Content chat will be connected in the next phase.');
+    chatInput.disabled  = true;
+    chatSendBtn.disabled = true;
+
+    // Clear sidebar active state (this is a new real session, not a demo item)
+    document.querySelectorAll('.history-item').forEach(h => h.classList.remove('active'));
+
+    // Persist session id in runtime only
+    activeSessionId = session.id || null;
   }
 
-  // Navigation Click Handlers
+  // -------------------------------------------------------------------------
+  // 6. Helpers
+  // -------------------------------------------------------------------------
+  function getYouTubeThumbnail(url) {
+    try {
+      const parsed = new URL(url);
+      let videoId  = parsed.searchParams.get('v');
+      if (!videoId && parsed.hostname.includes('youtu.be')) {
+        videoId = parsed.pathname.slice(1);
+      }
+      if (videoId) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    } catch {}
+    return 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&q=80';
+  }
+
+  function formatDate(isoString) {
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return isoString;
+    }
+  }
+
+  function setChatPlaceholder(text) {
+    if (chatInput) chatInput.placeholder = text;
+  }
+
+  function bindTimelineClicks() {
+    document.querySelectorAll('.timeline-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const time  = item.dataset.time;
+        const topic = item.dataset.topic;
+        if (chatInput && !chatInput.disabled) {
+          appendUserMessage(`Explain the segment at ${time} regarding "${topic}".`);
+          setTimeout(() => {
+            appendAIMessage(`At <strong>${time}</strong>, the content covers "<em>${topic}</em>". Content chat will be fully connected in the next phase.`);
+          }, 600);
+        } else {
+          showToast(`Segment: ${time} — ${topic}`);
+        }
+      });
+    });
+  }
+
+  function bindEntityClicks() {
+    document.querySelectorAll('.tag-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        if (chatInput && !chatInput.disabled) {
+          appendUserMessage(`Tell me more about ${pill.innerText}.`);
+          setTimeout(() => {
+            appendAIMessage(`"${pill.innerText}" is a key topic identified in this session. Content chat will be fully connected in the next phase.`);
+          }, 600);
+        } else {
+          showToast(`Topic: ${pill.innerText}`);
+        }
+      });
+    });
+  }
+
+  function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[&<>'"/]/g,
+      tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;' }[tag] || tag)
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 7. Input Validation
+  // -------------------------------------------------------------------------
+  function isValidUrl(str) {
+    try { new URL(str); return true; } catch { return false; }
+  }
+
+  function isYouTubeUrl(str) {
+    try {
+      const host = new URL(str).hostname.toLowerCase();
+      return host.includes('youtube.com') || host.includes('youtu.be');
+    } catch { return false; }
+  }
+
+  // -------------------------------------------------------------------------
+  // 8. API Call — POST /api/analyze/url
+  // -------------------------------------------------------------------------
+  async function callAnalyzeAPI(youtubeUrl) {
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
+    try {
+      const response = await fetch(ANALYZE_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url: youtubeUrl, workspace_id: 'main-workspace' }),
+        signal:  controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      // Parse JSON regardless of status to read error messages
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Server returned an invalid response. Please try again.');
+      }
+
+      if (!response.ok) {
+        // Map backend error codes to user-friendly messages
+        const code = data.code || '';
+        if (code === 'INVALID_URL')          throw new Error('Invalid URL. Please enter a valid YouTube link.');
+        if (code === 'UNSUPPORTED_SOURCE')   throw new Error('Only public YouTube URLs are supported. Facebook & Image analysis coming soon.');
+        if (response.status === 503)         throw new Error('The analysis server is starting up (Render cold start). Please wait 30 seconds and try again.');
+        throw new Error(data.message || `Server error (${response.status}). Please try again.`);
+      }
+
+      if (data.status !== 'ok' || !data.analysis) {
+        throw new Error('Received an unexpected response from the server. Please try again.');
+      }
+
+      return data; // { status, session, analysis }
+
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. Gemini analysis can take up to 2 minutes. Please try again.');
+      }
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        throw new Error('Cannot reach the analysis server. Check your internet connection or try again in a moment.');
+      }
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 9. Analyze Submit Handler (REAL API)
+  // -------------------------------------------------------------------------
+  async function handleAnalyzeSubmit() {
+    // — Image tab —
+    if (activeTab === 'image') {
+      showToast('Image analysis will be available soon.', false);
+      return;
+    }
+
+    // — Facebook tab —
+    if (activeTab === 'facebook') {
+      showToast('Facebook analysis is coming in a later phase.', false);
+      return;
+    }
+
+    const val = urlInputField.value.trim();
+
+    // Test 1: Empty URL
+    if (!val) {
+      showToast('⚠️ Please enter a YouTube URL first!', true);
+      inputActionCard.style.borderColor = '#EF4444';
+      setTimeout(() => inputActionCard.style.borderColor = '', 2000);
+      return;
+    }
+
+    // Test 2: Invalid URL format
+    if (!isValidUrl(val)) {
+      showToast('⚠️ This does not look like a valid URL. Please check and try again.', true);
+      return;
+    }
+
+    // Test 3: Non-YouTube URL
+    if (!isYouTubeUrl(val)) {
+      showToast('⚠️ Only YouTube URLs are supported right now. Facebook & Image analysis coming soon.', true);
+      return;
+    }
+
+    // Test 8: Duplicate request guard
+    if (isAnalyzing) {
+      showToast('Analysis already in progress, please wait…');
+      return;
+    }
+
+    // — Start request —
+    isAnalyzing = true;
+    setAnalyzeButtonState(true);
+    showLoadingView();
+
+    try {
+      const result = await callAnalyzeAPI(val);
+
+      // Tests 5 & 6: Render real Gemini response
+      renderRealAnalysis(result.session, result.analysis);
+      showAnalysisView();
+      showToast('✅ Analysis complete!');
+
+    } catch (err) {
+      // Test 7: Error handling
+      showHomeView();
+      showToast(`❌ ${err.message}`, true);
+    } finally {
+      isAnalyzing = false;
+      setAnalyzeButtonState(false);
+    }
+  }
+
+  function setAnalyzeButtonState(loading) {
+    if (loading) {
+      analyzeBtn.disabled   = true;
+      analyzeBtn.innerHTML  = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"></circle>
+        </svg>
+        Analyzing…`;
+    } else {
+      analyzeBtn.disabled   = false;
+      analyzeBtn.innerHTML  = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+        </svg>
+        Analyze`;
+    }
+  }
+
+  analyzeBtn.addEventListener('click', handleAnalyzeSubmit);
+  urlInputField.addEventListener('keydown', e => { if (e.key === 'Enter') handleAnalyzeSubmit(); });
+
+  // -------------------------------------------------------------------------
+  // 10. Navigation Click Handlers
+  // -------------------------------------------------------------------------
   navNewAnalysisBtn.addEventListener('click', () => {
     urlInputField.value = '';
+    // Re-enable chat if it was disabled by a real analysis
+    if (chatInput)    chatInput.disabled   = false;
+    if (chatSendBtn)  chatSendBtn.disabled = false;
+    setChatPlaceholder('Ask anything about this content...');
     showHomeView();
     showToast('Started new analysis session');
   });
 
   navHome.addEventListener('click', showHomeView);
-  
+
   navSessions.addEventListener('click', () => {
     showHomeView();
     document.getElementById('recentSessionsGrid').scrollIntoView({ behavior: 'smooth' });
@@ -328,18 +699,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   if (viewAllLink) {
-    viewAllLink.addEventListener('click', (e) => {
+    viewAllLink.addEventListener('click', e => {
       e.preventDefault();
       document.getElementById('recentSessionsGrid').scrollIntoView({ behavior: 'smooth' });
     });
   }
 
-  // --- 4. Mobile Drawer ---
-  mobileMenuBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('open');
-  });
+  // -------------------------------------------------------------------------
+  // 11. Mobile Drawer
+  // -------------------------------------------------------------------------
+  mobileMenuBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
 
-  // --- 5. Source Tabs & Drag & Drop ---
+  // -------------------------------------------------------------------------
+  // 12. Source Tabs
+  // -------------------------------------------------------------------------
   sourceTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       sourceTabs.forEach(t => t.classList.remove('active'));
@@ -356,75 +729,54 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeTab === 'youtube') {
           urlInputField.placeholder = 'Paste YouTube URL (e.g. https://youtube.com/watch?v=...)';
         } else if (activeTab === 'facebook') {
-          urlInputField.placeholder = 'Paste Facebook public video URL...';
+          urlInputField.placeholder = 'Facebook analysis is coming in a later phase…';
         } else {
-          urlInputField.placeholder = 'Paste any supported content URL here...';
+          urlInputField.placeholder = 'Paste any supported content URL here…';
         }
       }
     });
   });
 
-  // Image Dropzone file picker
-  imageDropzone.addEventListener('click', () => {
-    imageFileInput.click();
-  });
-
-  imageFileInput.addEventListener('change', (e) => {
+  // Image Dropzone
+  imageDropzone.addEventListener('click', () => imageFileInput.click());
+  imageFileInput.addEventListener('change', e => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      dropzoneText.innerHTML = `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${(file.size / 1024).toFixed(1)} KB — Click Analyze to process image</p>`;
-      showToast(`Selected image file: ${file.name}`);
+      dropzoneText.innerHTML = `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${(file.size / 1024).toFixed(1)} KB — Image analysis will be available soon.</p>`;
+      showToast('Image analysis will be available soon.');
     }
   });
 
-  // Analyze Submit Handler
-  function handleAnalyzeSubmit() {
-    if (activeTab === 'image') {
-      if (!imageFileInput.files || !imageFileInput.files[0]) {
-        showToast('⚠️ Please select an image file first!');
-        imageDropzone.style.borderColor = '#EF4444';
-        setTimeout(() => imageDropzone.style.borderColor = '', 2000);
-        return;
-      }
-      showLoadingView(() => showAnalysisView('session-3'));
-      return;
-    }
-
-    const val = urlInputField.value.trim();
-    if (!val) {
-      showToast('⚠️ Please enter a YouTube or Facebook URL first!');
-      inputActionCard.style.borderColor = '#EF4444';
-      setTimeout(() => inputActionCard.style.borderColor = '', 2000);
-      return;
-    }
-
-    showToast('Processing media URL with Gemini AI...');
-    showLoadingView(() => showAnalysisView('session-1'));
-  }
-
-  analyzeBtn.addEventListener('click', handleAnalyzeSubmit);
-  urlInputField.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleAnalyzeSubmit();
-  });
-
-  // Sidebar History & Recent Session Cards Click Handlers
+  // -------------------------------------------------------------------------
+  // 13. Sidebar History & Recent Session Cards (demo sessions only)
+  // -------------------------------------------------------------------------
   document.querySelectorAll('.history-item').forEach(item => {
     item.addEventListener('click', () => {
       const sessionId = item.dataset.id;
-      showAnalysisView(sessionId);
-      showToast(`Loaded ${item.innerText.trim()}`);
+      // Re-enable chat for demo sessions
+      if (chatInput)    chatInput.disabled   = false;
+      if (chatSendBtn)  chatSendBtn.disabled = false;
+      renderMockSessionData(sessionId);
+      showAnalysisView();
+      showToast(`Loaded: ${item.innerText.trim()}`);
     });
   });
 
   document.querySelectorAll('.session-card').forEach(card => {
     card.addEventListener('click', () => {
       const sessionId = card.dataset.id;
-      showAnalysisView(sessionId);
-      showToast(`Opened session`);
+      // Re-enable chat for demo sessions
+      if (chatInput)    chatInput.disabled   = false;
+      if (chatSendBtn)  chatSendBtn.disabled = false;
+      renderMockSessionData(sessionId);
+      showAnalysisView();
+      showToast('Opened demo session');
     });
   });
 
-  // --- 6. Interactive Chat Pane ---
+  // -------------------------------------------------------------------------
+  // 14. Chat Panel (Mock — will be replaced in next phase)
+  // -------------------------------------------------------------------------
   function appendUserMessage(text) {
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble user';
@@ -444,6 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleSendChat() {
+    if (chatInput.disabled) return;
     const msg = chatInput.value.trim();
     if (!msg) return;
 
@@ -451,23 +804,21 @@ document.addEventListener('DOMContentLoaded', () => {
     chatInput.value = '';
 
     setTimeout(() => {
-      let reply = "I analyzed this part of the content session. The data confirms high visual and spoken accuracy.";
       const lower = msg.toLowerCase();
+      let reply = 'I analyzed this session. Content chat will be fully connected in the next phase.';
       if (lower.includes('main idea') || lower.includes('summary')) {
-        reply = "The main idea of this session is to provide a structured breakdown of the core subjects, key events, and factual timeline.";
+        reply = 'The main idea is captured in the Overview section above. Full chat coming next phase!';
       } else if (lower.includes('who') || lower.includes('abdallah')) {
-        reply = "Hello Abdallah! I am ready to answer any detailed questions about this content session.";
+        reply = 'Hello Abdallah! I am ready to answer detailed questions once real chat is connected.';
       } else if (lower.includes('timeline') || lower.includes('timestamp')) {
-        reply = "The interactive timeline divides the key video segments into chronological topics. Click any timeline row to jump directly to it!";
+        reply = 'Click any timeline row to ask about a specific segment! Full chat integration coming next phase.';
       }
       appendAIMessage(reply);
     }, 600);
   }
 
   chatSendBtn.addEventListener('click', handleSendChat);
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleSendChat();
-  });
+  chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleSendChat(); });
 
   chatExpandBtn.addEventListener('click', () => {
     chatPanel.classList.toggle('expanded');
@@ -475,29 +826,25 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   chatAttachBtn.addEventListener('click', () => {
-    showToast('📎 Attachment feature ready for Phase 3 asset uploads');
+    showToast('📎 Attachment upload coming in a later phase.');
   });
 
-  // --- 7. Modal System ---
+  // -------------------------------------------------------------------------
+  // 15. Modal System
+  // -------------------------------------------------------------------------
   function openModal(titleText) {
     modalTitle.innerText = titleText;
     modalBackdrop.style.display = 'flex';
   }
-
   function closeModal() {
     modalBackdrop.style.display = 'none';
   }
 
-  userProfileBtn.addEventListener('click', () => {
-    openModal('Abdallah — Workspace Profile');
-  });
-
+  userProfileBtn.addEventListener('click', () => openModal('Abdallah — Workspace Profile'));
   modalCloseBtn.addEventListener('click', closeModal);
-  modalBackdrop.addEventListener('click', (e) => {
-    if (e.target === modalBackdrop) closeModal();
-  });
+  modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
 
-  settingOwnerInput.addEventListener('change', (e) => {
+  settingOwnerInput.addEventListener('change', e => {
     const newName = e.target.value.trim() || 'Abdallah';
     document.querySelectorAll('.user-name').forEach(el => el.innerText = newName);
     showToast(`Updated profile owner to ${newName}`);
@@ -509,10 +856,11 @@ document.addEventListener('DOMContentLoaded', () => {
     showHomeView();
   });
 
-  // Helper
-  function escapeHTML(str) {
-    return str.replace(/[&<>'"]/g, 
-      tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-    );
-  }
+  // -------------------------------------------------------------------------
+  // 16. Spinner CSS (injected so no stylesheet change needed)
+  // -------------------------------------------------------------------------
+  const spinStyle = document.createElement('style');
+  spinStyle.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+  document.head.appendChild(spinStyle);
+
 });
