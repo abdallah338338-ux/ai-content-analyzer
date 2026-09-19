@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Content Analyzer — Understand Any Video, Image or Link</title>
+  <meta name="description" content="AI Content Analyzer allows you to understand YouTube videos, Facebook media, and images with deep multimodal analysis and interactive chat.">
+  
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="assets/icons/icon.svg">
+  <meta name="theme-color" content="#2563EB">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- Left Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+            <path d="M12 6a6 6 0 0 0-6 6c0 3.31 2.69 6 6 6s6-2.69 6-6a6 6 0 0 0-6-6zm0 10a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h2>AI Content Analyzer</h2>
+          <p>Understand Any Video, Image or Link</p>
+        </div>
+      </div>
+
+      <button class="new-analysis-btn" id="navNewAnalysisBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        New Analysis
+      </button>
+
+      <nav class="nav-section">
+        <a href="#" class="nav-item active" id="navHome">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Home
+        </a>
+        <a href="#" class="nav-item" id="navSessions">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          Sessions
+          <span class="badge" id="sessionBadgeCount">4</span>
+        </a>
+        <a href="#" class="nav-item" id="navFavorites">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          Favorites
+        </a>
+        <a href="#" class="nav-item" id="navSettings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Settings
+        </a>
+      </nav>
+
+      <div class="history-section-title">Recent History</div>
+      <div class="history-list" id="sidebarHistoryList">
+        <div class="history-item active" data-id="session-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          How Black Holes Work
+        </div>
+        <div class="history-item" data-id="session-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+          </svg>
+          The Power of Habits
+        </div>
+        <div class="history-item" data-id="session-3">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          Project Design Diagram
+        </div>
+        <div class="history-item" data-id="session-4">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          Architectural History Overview
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="gemini-badge-card">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+          </svg>
+          <div class="text">
+            <strong>Powered by Gemini</strong>
+            <span>Smarter analysis. Deeper understanding.</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="main-wrapper">
+      
+      <!-- Top Navbar Header -->
+      <header class="top-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Navigation Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+
+        <div class="header-title-area">
+          <h1 id="headerTitle">AI Content Analyzer</h1>
+        </div>
+
+        <div class="header-actions">
+          <!-- Theme Toggle Switcher -->
+          <div class="theme-toggle-pill" title="Toggle Light/Dark Theme">
+            <button id="themeToggleLight" aria-label="Light Theme">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </button>
+            <button id="themeToggleDark" class="active" aria-label="Dark Theme">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </button>
+          </div>
+
+          <!-- User Profile -->
+          <div class="user-profile-badge" id="userProfileBtn">
+            <div class="user-avatar">A</div>
+            <span class="user-name">Abdallah</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+      </header>
+
+      <!-- View Container -->
+      <main class="page-container">
+
+        <!-- VIEW 1: HOME / NEW SESSION EXPERIENCE -->
+        <section id="viewHome">
+          <div class="welcome-hero">
+            <h2>Welcome, Abdallah 👋</h2>
+            <p>Paste a YouTube or Facebook link, or upload an image, and I'll help you understand the content and answer your questions.</p>
+
+            <!-- Source Selection Tabs -->
+            <div class="source-tabs">
+              <button class="tab-btn active" data-target="youtube" id="tabYoutube">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" color="#EF4444">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+                YouTube Link
+              </button>
+              <button class="tab-btn" data-target="facebook" id="tabFacebook">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" color="#3B82F6">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                Facebook Link
+              </button>
+              <button class="tab-btn" data-target="image" id="tabImage">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="#10B981">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                Upload Image
+              </button>
+              <button class="tab-btn" data-target="url" id="tabUrl">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+                Paste URL
+              </button>
+            </div>
+
+            <!-- Input Box -->
+            <div class="input-action-card" id="inputActionCard">
+              <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              </svg>
+              <input type="text" class="url-input-field" id="urlInputField" placeholder="Paste YouTube or Facebook URL here...">
+              <button class="analyze-submit-btn" id="analyzeBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+                </svg>
+                Analyze
+              </button>
+            </div>
+
+            <!-- Drag & Drop Area for Image Upload -->
+            <div class="image-dropzone" id="imageDropzone">
+              <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+              <div class="dropzone-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </div>
+              <div class="dropzone-text" id="dropzoneText">
+                <h4>Drag and drop your image here, or click to browse</h4>
+                <p>Supports PNG, JPG, WEBP up to 10MB</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Sessions List -->
+          <div class="recent-sessions-header">
+            <h3 id="sessionsTitle">Recent Sessions</h3>
+            <a href="#" class="view-all-link" id="viewAllLink">View all &rarr;</a>
+          </div>
+
+          <div class="recent-sessions-grid" id="recentSessionsGrid">
+            <!-- Card 1 -->
+            <div class="session-card" data-id="session-1">
+              <div class="session-thumb">
+                <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=300&q=80" alt="Black Hole">
+                <span class="thumb-duration">18:42</span>
+              </div>
+              <div class="session-info">
+                <h4>How Black Holes Work</h4>
+                <div class="session-meta">
+                  <span class="source-badge youtube">🔴 YouTube</span>
+                  <span>May 12, 2024 • 18:42</span>
+                </div>
+              </div>
+              <div class="session-msg-count">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                12
+              </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="session-card" data-id="session-2">
+              <div class="session-thumb">
+                <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=300&q=80" alt="Nature">
+                <span class="thumb-duration">10:15</span>
+              </div>
+              <div class="session-info">
+                <h4>The Power of Habits</h4>
+                <div class="session-meta">
+                  <span class="source-badge facebook">🔵 Facebook</span>
+                  <span>May 10, 2024 • 10:15</span>
+                </div>
+              </div>
+              <div class="session-msg-count">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                8
+              </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="session-card" data-id="session-3">
+              <div class="session-thumb">
+                <img src="https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=300&q=80" alt="Diagram">
+                <span class="thumb-duration">03:24</span>
+              </div>
+              <div class="session-info">
+                <h4>Project Design Diagram</h4>
+                <div class="session-meta">
+                  <span class="source-badge image">🖼️ Image</span>
+                  <span>May 8, 2024 • 03:24</span>
+                </div>
+              </div>
+              <div class="session-msg-count">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                5
+              </div>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="session-card" data-id="session-4">
+              <div class="session-thumb">
+                <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&q=80" alt="Architecture">
+                <span class="thumb-duration">22:17</span>
+              </div>
+              <div class="session-info">
+                <h4>Architectural History Overview</h4>
+                <div class="session-meta">
+                  <span class="source-badge youtube">🔴 YouTube</span>
+                  <span>May 5, 2024 • 22:17</span>
+                </div>
+              </div>
+              <div class="session-msg-count">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                14
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 2: LOADING STATE -->
+        <section id="viewLoading" class="loading-view">
+          <div class="loading-spinner-ring"></div>
+          <h3>Analyzing Content with Gemini AI...</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Building structured multimodal memory and context</p>
+
+          <div class="loading-steps">
+            <div class="loading-step-item active">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Reading public media source
+            </div>
+            <div class="loading-step-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Extracting audio dialogue & speech
+            </div>
+            <div class="loading-step-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Analyzing visual scenes & keyframes
+            </div>
+            <div class="loading-step-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Building interactive session memory
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: CONTENT SESSION & STRUCTURED ANALYSIS SCHEMA -->
+        <section id="viewAnalysis" class="analysis-session-view">
+          <!-- Session Header Card -->
+          <div class="session-header-card">
+            <div class="session-header-media">
+              <img id="sessionHeaderImage" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&q=80" alt="Media Title">
+            </div>
+            <div class="session-header-details">
+              <h2 id="sessionHeaderTitle">How Black Holes Work</h2>
+              <p id="sessionHeaderDesc">A comprehensive breakdown of gravitational singularities, event horizons, accretion disks, and spacetime curvature.</p>
+              <div class="session-meta" style="margin-top: 8px;">
+                <span class="source-badge youtube" id="sessionHeaderBadge">🔴 YouTube</span>
+                <span id="sessionHeaderDate">May 12, 2024 • 18:42</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Overview -->
+          <div class="analysis-block">
+            <div class="analysis-block-header">
+              <svg class="block-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <h3>Overview</h3>
+            </div>
+            <p id="analysisOverview" style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">
+              The video explains what black holes are, how massive stellar collapse forms them, and the physics governing the event horizon. It breaks down complex astrophysics concepts using clear visual simulations and accessible narration, making it easy to digest for students and enthusiasts alike.
+            </p>
+          </div>
+
+          <!-- Section: Key Points -->
+          <div class="analysis-block">
+            <div class="analysis-block-header">
+              <svg class="block-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 11 12 14 22 4"></polyline>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+              <h3>Key Points</h3>
+            </div>
+            <ul class="key-points-list" id="analysisKeyPoints">
+              <li class="key-point-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span><strong>Stellar Core Collapse:</strong> Supermassive stars collapse under intense gravity when nuclear fusion ceases in their core.</span>
+              </li>
+              <li class="key-point-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span><strong>Event Horizon:</strong> The point of no return where escape velocity exceeds the speed of light.</span>
+              </li>
+              <li class="key-point-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span><strong>Accretion Disk Dynamics:</strong> Superheated gas and dust orbiting the black hole glow brightly in X-ray spectrums.</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Section: Interactive Timeline -->
+          <div class="analysis-block">
+            <div class="analysis-block-header">
+              <svg class="block-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <h3>Interactive Timeline</h3>
+            </div>
+
+            <div class="timeline-container" id="analysisTimeline">
+              <div class="timeline-item">
+                <span class="timestamp-tag">00:00 — 02:15</span>
+                <div class="timeline-content">
+                  <h5>Introduction to Gravitational Collapse</h5>
+                  <p>Overview of massive stars and the pressure equilibrium before stellar death.</p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <span class="timestamp-tag">02:15 — 06:40</span>
+                <div class="timeline-content">
+                  <h5>Event Horizon Geometry & Schwarzschild Radius</h5>
+                  <p>Detailed explanation of space curvature and light-bending near the boundary.</p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <span class="timestamp-tag">06:40 — 12:10</span>
+                <div class="timeline-content">
+                  <h5>Accretion Disks and Relativistic Jets</h5>
+                  <p>How superheated matter emits high-energy X-rays before crossing the horizon.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Speech & Visual Analysis Grid -->
+          <div class="grid-two-col">
+            <div class="analysis-block">
+              <div class="analysis-block-header">
+                <svg class="block-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                </svg>
+                <h3>Speech Analysis</h3>
+              </div>
+              <p id="analysisSpeech" style="color: var(--text-secondary); font-size: 13px; line-height: 1.6;">
+                Narration is paced clearly with precise astrophysics terminology. Analogies like "trampoline bowling balls" are used to explain spacetime curvature.
+              </p>
+            </div>
+
+            <div class="analysis-block">
+              <div class="analysis-block-header">
+                <svg class="block-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                <h3>Visual Analysis</h3>
+              </div>
+              <p id="analysisVisual" style="color: var(--text-secondary); font-size: 13px; line-height: 1.6;">
+                Combines 3D ray-tracing simulations with infrared telescope captures. High-contrast diagrams highlight photon spheres and doppler beaming.
+              </p>
+            </div>
+          </div>
+
+          <!-- Section: Entities & References -->
+          <div class="analysis-block">
+            <div class="analysis-block-header">
+              <svg class="block-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                <line x1="7" y1="7" x2="7.01" y2="7"></line>
+              </svg>
+              <h3>Entities & Keywords</h3>
+            </div>
+            <div class="tag-cloud" id="analysisEntities">
+              <span class="tag-pill">General Relativity</span>
+              <span class="tag-pill">Schwarzschild Radius</span>
+              <span class="tag-pill">Event Horizon Telescope</span>
+              <span class="tag-pill">Accretion Disk</span>
+              <span class="tag-pill">Hawking Radiation</span>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- Right Sidebar: Chat with this content -->
+    <aside class="chat-panel" id="chatPanel" style="display: none;">
+      <div class="chat-panel-header">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--accent-blue)">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          Chat with this content
+        </h3>
+        <button id="chatExpandBtn" style="color: var(--text-muted);" title="Toggle Fullscreen Chat">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mini Video Context Badge -->
+      <div class="chat-video-preview-mini">
+        <img id="chatMiniThumb" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=200&q=80" alt="Preview">
+        <div class="mini-meta">
+          <h5 id="chatMiniTitle">How Black Holes Work</h5>
+          <span class="source-badge youtube" id="chatMiniMeta">🔴 YouTube • May 12, 2024 • 18:42</span>
+        </div>
+      </div>
+
+      <!-- Chat Stream -->
+      <div class="chat-messages-stream" id="chatMessagesStream">
+        <!-- Message 1: User -->
+        <div class="chat-bubble user">
+          <p>What is the main idea of this video?</p>
+          <div class="bubble-time">10:24 AM ✓</div>
+        </div>
+
+        <!-- Message 2: Assistant -->
+        <div class="chat-bubble assistant">
+          <p>The main idea of this video is to explain what black holes are, how they form from stellar core collapse, and what happens at the event horizon boundary. It breaks down complex concepts using simple language and stunning visual simulations.</p>
+          <div class="bubble-time">10:24 AM</div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="chat-input-bar">
+        <div class="chat-input-container">
+          <button id="chatAttachBtn" style="color: var(--text-muted); font-size: 16px;" title="Attach file or reference">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+            </svg>
+          </button>
+          <input type="text" class="chat-text-input" id="chatInput" placeholder="Ask anything about this content...">
+          <button class="chat-send-btn" id="chatSendBtn" aria-label="Send Message">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Settings & Profile Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modalTitle">Settings & Workspace</h3>
+        <button id="modalCloseBtn" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div class="modal-field">
+          <label>Workspace Owner</label>
+          <input type="text" id="settingOwnerInput" value="Abdallah" class="modal-input">
+        </div>
+        <div class="modal-field">
+          <label>Workspace Access ID</label>
+          <input type="text" value="ABD-7842-9901" readonly class="modal-input" style="opacity: 0.7;">
+        </div>
+        <div class="modal-field">
+          <label>Default Analysis Mode</label>
+          <select id="settingModeSelect" class="modal-input">
+            <option value="full">Full Analysis (Multimodal)</option>
+            <option value="summary">Quick Summary</option>
+            <option value="timeline">Timeline Focus</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <button id="clearHistoryBtn" class="danger-btn">Clear Local Mock Sessions</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastNotification" class="toast-card" style="display: none;"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
