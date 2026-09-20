@@ -138,6 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const imageDropzone  = document.getElementById('imageDropzone');
   const imageFileInput = document.getElementById('imageFileInput');
   const dropzoneText   = document.getElementById('dropzoneText');
+  const analyzeImageBtn = document.getElementById('analyzeImageBtn');
 
   const sessionHeaderTitle = document.getElementById('sessionHeaderTitle');
   const sessionHeaderDesc  = document.getElementById('sessionHeaderDesc');
@@ -806,8 +807,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       selectedImageFile = file;
-      dropzoneText.innerHTML = `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${(file.size / 1024).toFixed(1)} KB — ready to analyze. Press "Analyze" above.</p>`;
+      dropzoneText.innerHTML = `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${(file.size / 1024).toFixed(1)} KB — ready to analyze.</p>`;
     }
+  });
+
+  // Analyze Image button lives inside the dropzone — stop the click from
+  // bubbling up to imageDropzone's own click handler (which reopens the file picker).
+  analyzeImageBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    handleAnalyzeSubmit();
   });
 
   // -------------------------------------------------------------------------
