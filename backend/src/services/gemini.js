@@ -63,6 +63,26 @@ export async function answerSessionQuestion(session, previousMessages, message) 
   }
 }
 
+export async function analyzeImage(buffer, mimeType, analysisMode = "full") {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw { code: "GEMINI_KEY_MISSING", message: "GEMINI_API_KEY environment variable is not configured." };
+  const prompt = `Analyze this image and return ONLY valid raw JSON with this schema: {"title":"","overview":"","key_points":[],"timeline":[],"speech_analysis":"","visual_analysis":"","structure":"","evidence_notes":[],"entities":[],"uncertainties":[]}. Focus only on visible elements, readable text, relationships, and uncertainty. Do not invent details or timestamps. Analysis mode: ${analysisMode}.`;
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType, data: buffer.toString("base64") } }] }],
+    });
+    let rawText = response.text ? response.text.trim() : "";
+    if (rawText.startsWith("```")) rawText = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+    return normalizeSchema(JSON.parse(rawText));
+  } catch (error) {
+    console.error("[gemini] Error analyzing image:", error.message || error);
+    let safeMessage = (error.message || "Unable to analyze image.").replaceAll(apiKey, "[REDACTED]");
+    if (error instanceof SyntaxError) throw { code: "IMAGE_ANALYSIS_FAILED", message: "Gemini returned invalid image analysis." };
+    throw { code: error.code || "GEMINI_REQUEST_FAILED", message: safeMessage };
+  }
+}
 export async function analyzeYouTubeVideo(url, analysisMode = "full") {
   const apiKey = process.env.GEMINI_API_KEY;
 
