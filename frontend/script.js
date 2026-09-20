@@ -822,7 +822,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 13. Real Session History
   // -------------------------------------------------------------------------
   function sourceBadge(sourceType) {
-    return sourceType === 'youtube' ? 'YouTube' : (sourceType || 'Content');
+    if (sourceType === 'image') return { cls: 'image', label: '🖼️ Image' };
+    if (sourceType === 'facebook') return { cls: 'facebook', label: '🔵 Facebook' };
+    return { cls: 'youtube', label: '🔴 YouTube' };
   }
 
   function renderRealSessions(sessions) {
@@ -834,7 +836,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     sidebarHistoryList.innerHTML = sessions.map(session => `<button class="history-item ${session.id === currentSessionId ? 'active' : ''}" data-real-session-id="${escapeHTML(session.id)}" type="button">${escapeHTML(session.title || 'Untitled content')}</button>`).join('');
-    recentSessionsGrid.innerHTML = sessions.map(session => `<button class="session-card" data-real-session-id="${escapeHTML(session.id)}" type="button"><div class="session-info"><h4>${escapeHTML(session.title || 'Untitled content')}</h4><div class="session-meta"><span class="source-badge youtube">${escapeHTML(sourceBadge(session.source_type))}</span><span>${escapeHTML(formatDate(session.created_at || session.updated_at || ''))}</span></div><div class="session-meta"><span>${escapeHTML(session.status || 'completed')}</span></div></div></button>`).join('');
+    recentSessionsGrid.innerHTML = sessions.map(session => {
+      const badge = sourceBadge(session.source_type);
+      return `<button class="session-card" data-real-session-id="${escapeHTML(session.id)}" type="button"><div class="session-info"><h4>${escapeHTML(session.title || 'Untitled content')}</h4><div class="session-meta"><span class="source-badge ${badge.cls}">${escapeHTML(badge.label)}</span><span>${escapeHTML(formatDate(session.created_at || session.updated_at || ''))}</span></div><div class="session-meta"><span>${escapeHTML(session.status || 'completed')}</span></div></div></button>`;
+    }).join('');
     document.querySelectorAll('[data-real-session-id]').forEach(item => item.addEventListener('click', () => openRealSession(item.dataset.realSessionId)));
   }
 
@@ -846,7 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openRealSession(sessionId) {
     try {
       const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}`);
-      renderRealAnalysis(data.session, data.analysis);
+      const sourceType = data.session.source_type === 'image' ? 'image' : 'youtube';
+      renderRealAnalysis(data.session, data.analysis, sourceType);
       await loadSessionMessages(sessionId);
       await loadRealSessions();
       showAnalysisView();
