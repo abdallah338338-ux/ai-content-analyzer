@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSessionId = null;      // real Supabase session currently open
   let currentWorkspaceId = WORKSPACE_ID;
   let isAnalyzing     = false;      // duplicate-request guard
+  let selectedImageFile = null;     // file picked in the image dropzone, awaiting analysis
 
   // -------------------------------------------------------------------------
   // Mock Dataset — kept for sidebar demo history; NEVER shown after real API
@@ -316,19 +317,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   // 5. Render REAL API Analysis
   // -------------------------------------------------------------------------
-  function renderRealAnalysis(session, analysis) {
+  function renderRealAnalysis(session, analysis, sourceType = 'youtube', thumbOverride = null) {
     // — Session Header —
-    const title       = analysis.title || session.title || 'YouTube Video Analysis';
+    const title       = analysis.title || session.title || (sourceType === 'image' ? 'Image Analysis' : 'YouTube Video Analysis');
     const sourceUrl   = session.source_url || '';
     const createdRaw  = session.created_at  || new Date().toISOString();
     const dateLabel   = formatDate(createdRaw);
-    const thumbUrl    = getYouTubeThumbnail(sourceUrl);
+    const thumbUrl    = thumbOverride || getYouTubeThumbnail(sourceUrl);
+    const badgeClass  = sourceType === 'image' ? 'image' : 'youtube';
+    const badgeText   = sourceType === 'image' ? '🖼️ Image' : '🔴 YouTube';
 
     sessionHeaderTitle.innerText  = title;
     sessionHeaderDesc.innerText   = analysis.overview || '';
     sessionHeaderImage.src        = thumbUrl;
-    sessionHeaderBadge.className  = 'source-badge youtube';
-    sessionHeaderBadge.innerText  = '🔴 YouTube';
+    sessionHeaderBadge.className  = `source-badge ${badgeClass}`;
+    sessionHeaderBadge.innerText  = badgeText;
     sessionHeaderDate.innerText   = dateLabel;
 
     // — Overview —
@@ -438,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // — Chat Mini Badge —
     chatMiniTitle.innerText = title;
     chatMiniThumb.src       = thumbUrl;
-    chatMiniMeta.innerText  = `🔴 YouTube • ${dateLabel}`;
+    chatMiniMeta.innerText  = `${badgeText} • ${dateLabel}`;
 
     setChatAvailable(Boolean(session.id));
     clearChatMessages();
@@ -564,12 +567,85 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // -------------------------------------------------------------------------
+  // 8b. API Call — POST /api/analyze/image
+  // -------------------------------------------------------------------------
+  async function callAnalyzeImageAPI(file) {
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('workspace_id', currentWorkspaceId || WORKSPACE_ID);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/analyze/image`, {
+        method: 'POST',
+        body: formData,               // browser sets multipart Content-Type automatically
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (response.status === 503) throw new Error('The analysis server is starting up (Render cold start). Please wait 30 seconds and try again.');
+        throw new Error(data.message || data.error || `Server error (${response.status}). Please try again.`);
+      }
+
+      if (data.status !== 'ok' || !data.analysis) {
+        throw new Error('Received an unexpected response from the server. Please try again.');
+      }
+
+      return data; // { status, session, analysis }
+
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out. Gemini analysis can take up to 2 minutes. Please try again.');
+      }
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        throw new Error('Cannot reach the analysis server. Check your internet connection or try again in a moment.');
+      }
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // 9. Analyze Submit Handler (REAL API)
   // -------------------------------------------------------------------------
   async function handleAnalyzeSubmit() {
     // — Image tab —
     if (activeTab === 'image') {
-      showToast('Image analysis will be available soon.', false);
+      if (!selectedImageFile) {
+        showToast('⚠️ Please choose an image first.', true);
+        return;
+      }
+      if (isAnalyzing) {
+        showToast('Analysis already in progress, please wait…');
+        return;
+      }
+
+      isAnalyzing = true;
+      setAnalyzeButtonState(true);
+      showLoadingView();
+
+      try {
+        const result = await callAnalyzeImageAPI(selectedImageFile);
+        const localThumb = URL.createObjectURL(selectedImageFile);
+
+        renderRealAnalysis(result.session, result.analysis, 'image', localThumb);
+        await loadSessionMessages(result.session.id);
+        await loadRealSessions();
+        showAnalysisView();
+        showToast('✅ Image analysis complete!');
+
+      } catch (err) {
+        showHomeView();
+        showToast(`❌ ${err.message}`, true);
+      } finally {
+        isAnalyzing = false;
+        setAnalyzeButtonState(false);
+      }
       return;
     }
 
@@ -729,8 +805,8 @@ document.addEventListener('DOMContentLoaded', () => {
   imageFileInput.addEventListener('change', e => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      dropzoneText.innerHTML = `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${(file.size / 1024).toFixed(1)} KB — Image analysis will be available soon.</p>`;
-      showToast('Image analysis will be available soon.');
+      selectedImageFile = file;
+      dropzoneText.innerHTML = `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${(file.size / 1024).toFixed(1)} KB — ready to analyze. Press "Analyze" above.</p>`;
     }
   });
 
