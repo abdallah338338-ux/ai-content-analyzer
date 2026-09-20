@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, MediaResolution } from "@google/genai";
 
 function normalizeSchema(data) {
   return {
@@ -66,12 +66,13 @@ export async function answerSessionQuestion(session, previousMessages, message) 
 export async function analyzeImage(buffer, mimeType, analysisMode = "full") {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw { code: "GEMINI_KEY_MISSING", message: "GEMINI_API_KEY environment variable is not configured." };
-  const prompt = `Analyze this image and return ONLY valid raw JSON with this schema: {"title":"","overview":"","key_points":[],"timeline":[],"speech_analysis":"","visual_analysis":"","structure":"","evidence_notes":[],"entities":[],"uncertainties":[]}. Focus only on visible elements, readable text, relationships, and uncertainty. Do not invent details or timestamps. Analysis mode: ${analysisMode}.`;
+  const prompt = `Analyze this image and return ONLY valid raw JSON with this schema: {"title":"","overview":"","key_points":[],"timeline":[],"speech_analysis":"","visual_analysis":"","structure":"","evidence_notes":[],"entities":[],"uncertainties":[]}. Focus only on visible elements, readable text, relationships, and uncertainty. Do not invent details or timestamps. CRITICAL: if any URL, website address, program/app/extension name, file name, or button/menu label is clearly visible, transcribe it EXACTLY character-for-character into evidence_notes. If any such text is blurry, cut off, or too small to read with confidence, say so explicitly in uncertainties instead of guessing its content. Analysis mode: ${analysisMode}.`;
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3.6-flash",
       contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType, data: buffer.toString("base64") } }] }],
+      config: { mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH },
     });
     let rawText = response.text ? response.text.trim() : "";
     if (rawText.startsWith("```")) rawText = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
@@ -125,6 +126,8 @@ Please provide a detailed, structured analysis matching this JSON format:
   "uncertainties": []
 }
 
+CRITICAL — exact on-screen text: whenever a URL, website address, program/app/browser-extension name, file name, or a button/menu label appears clearly on screen, transcribe it EXACTLY character-for-character (do not paraphrase or approximate it) into evidence_notes, each entry paired with its approximate timestamp from the video. This is essential because a user may later ask for that exact text and you will only have this stored analysis to answer from — you will not be able to re-watch the video. If such text is shown too briefly, is blurry, or is partially obscured, say so explicitly in uncertainties instead of guessing its content.
+
 Analysis mode requested: ${analysisMode}.
 IMPORTANT: Respond ONLY with valid raw JSON. Do not include markdown code fence formatting (no \`\`\`json).`;
 
@@ -132,6 +135,7 @@ IMPORTANT: Respond ONLY with valid raw JSON. Do not include markdown code fence 
     const response = await ai.models.generateContent({
       model: "gemini-3.6-flash",
       contents: prompt,
+      config: { mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH },
     });
 
     let rawText = response.text ? response.text.trim() : "";
