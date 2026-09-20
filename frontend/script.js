@@ -320,13 +320,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   function renderRealAnalysis(session, analysis, sourceType = 'youtube', thumbOverride = null) {
     // — Session Header —
-    const title       = analysis.title || session.title || (sourceType === 'image' ? 'Image Analysis' : 'YouTube Video Analysis');
+    const title       = analysis.title || session.title || (sourceType === 'image' ? 'Image Analysis' : sourceType === 'facebook' ? 'Facebook Video' : 'YouTube Video Analysis');
     const sourceUrl   = session.source_url || '';
     const createdRaw  = session.created_at  || new Date().toISOString();
     const dateLabel   = formatDate(createdRaw);
     const thumbUrl    = thumbOverride || getYouTubeThumbnail(sourceUrl);
-    const badgeClass  = sourceType === 'image' ? 'image' : 'youtube';
-    const badgeText   = sourceType === 'image' ? '🖼️ Image' : '🔴 YouTube';
+    const badge       = sourceBadge(sourceType);
+    const badgeClass  = badge.cls;
+    const badgeText   = badge.label;
 
     sessionHeaderTitle.innerText  = title;
     sessionHeaderDesc.innerText   = analysis.overview || '';
@@ -515,6 +516,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch { return false; }
   }
 
+  function isFacebookUrl(str) {
+    try {
+      const host = new URL(str).hostname.toLowerCase();
+      return host.includes('facebook.com') || host.includes('fb.watch');
+    } catch { return false; }
+  }
+
   // -------------------------------------------------------------------------
   // 8. API Call — POST /api/analyze/url
   // -------------------------------------------------------------------------
@@ -543,8 +551,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) {
         // Map backend error codes to user-friendly messages
         const code = data.code || '';
-        if (code === 'INVALID_URL')          throw new Error('Invalid URL. Please enter a valid YouTube link.');
-        if (code === 'UNSUPPORTED_SOURCE')   throw new Error('Only public YouTube URLs are supported. Facebook & Image analysis coming soon.');
+        if (code === 'INVALID_URL')          throw new Error('Invalid URL. Please enter a valid link.');
+        if (code === 'UNSUPPORTED_SOURCE')   throw new Error('Only public YouTube and Facebook URLs are supported.');
+        if (code === 'FACEBOOK_OEMBED_FAILED' || code === 'FACEBOOK_OEMBED_UNREACHABLE') throw new Error(data.message || 'This Facebook link is not publicly accessible.');
         if (response.status === 503)         throw new Error('The analysis server is starting up (Render cold start). Please wait 30 seconds and try again.');
         throw new Error(data.message || `Server error (${response.status}). Please try again.`);
       }
@@ -652,7 +661,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // — Facebook tab —
     if (activeTab === 'facebook') {
-      showToast('Facebook analysis is coming in a later phase.', false);
+      const fbVal = urlInputField.value.trim();
+      if (!fbVal) {
+        showToast('⚠️ Please enter a Facebook video URL first!', true);
+        return;
+      }
+      if (!isFacebookUrl(fbVal)) {
+        showToast('⚠️ This does not look like a Facebook URL.', true);
+        return;
+      }
+      if (isAnalyzing) {
+        showToast('Analysis already in progress, please wait…');
+        return;
+      }
+      isAnalyzing = true;
+      setAnalyzeButtonState(true);
+      showLoadingView();
+      try {
+        const result = await callAnalyzeAPI(fbVal);
+        renderRealAnalysis(result.session, result.analysis, 'facebook');
+        await loadSessionMessages(result.session.id);
+        await loadRealSessions();
+        showAnalysisView();
+        showToast('✅ Metadata retrieved. Upload the video file for full analysis.');
+      } catch (err) {
+        showHomeView();
+        showToast(`❌ ${err.message}`, true);
+      } finally {
+        isAnalyzing = false;
+        setAnalyzeButtonState(false);
+      }
       return;
     }
 
@@ -674,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Test 3: Non-YouTube URL
     if (!isYouTubeUrl(val)) {
-      showToast('⚠️ Only YouTube URLs are supported right now. Facebook & Image analysis coming soon.', true);
+      showToast('⚠️ This tab only accepts YouTube URLs. Switch tabs for Facebook or Image.', true);
       return;
     }
 
@@ -793,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeTab === 'youtube') {
           urlInputField.placeholder = 'Paste YouTube URL (e.g. https://youtube.com/watch?v=...)';
         } else if (activeTab === 'facebook') {
-          urlInputField.placeholder = 'Facebook analysis is coming in a later phase…';
+          urlInputField.placeholder = 'Paste Facebook video URL (public videos only)…';
         } else {
           urlInputField.placeholder = 'Paste any supported content URL here…';
         }
@@ -851,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openRealSession(sessionId) {
     try {
       const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}`);
-      const sourceType = data.session.source_type === 'image' ? 'image' : 'youtube';
+      const sourceType = ['image', 'facebook'].includes(data.session.source_type) ? data.session.source_type : 'youtube';
       renderRealAnalysis(data.session, data.analysis, sourceType);
       await loadSessionMessages(sessionId);
       await loadRealSessions();
