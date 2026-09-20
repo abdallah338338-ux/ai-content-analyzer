@@ -9,7 +9,34 @@
 const API_BASE_URL = "https://ai-content-analyzer-4i6u.onrender.com";
 const ANALYZE_URL  = `${API_BASE_URL}/api/analyze/url`;
 const SESSIONS_URL = `${API_BASE_URL}/api/sessions`;
-const WORKSPACE_ID = "main-workspace";
+
+// ---------------------------------------------------------------------------
+// Workspace identity — real cross-device sync.
+// Each browser gets its own private workspace ID on first visit, stored in
+// localStorage (device-local, never sent anywhere except as our own
+// workspace_id parameter). Pasting the same ID into another browser's
+// Settings panel gives that browser access to the same sessions, since the
+// backend filters purely by this string. Without this, every visitor to the
+// public site shared one single "main-workspace" bucket.
+// ---------------------------------------------------------------------------
+function getOrCreateWorkspaceId() {
+  const STORAGE_KEY = 'aica_workspace_id';
+  let id = null;
+  try { id = localStorage.getItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+  if (id && id.trim()) return id.trim();
+
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O/1/I
+  const randomBlock = () => {
+    const bytes = new Uint8Array(4);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    return Array.from(bytes, b => chars[b % chars.length]).join('');
+  };
+  id = `WS-${randomBlock()}-${randomBlock()}`;
+  try { localStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
+  return id;
+}
+
+const WORKSPACE_ID = getOrCreateWorkspaceId();
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -174,6 +201,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalTitle       = document.getElementById('modalTitle');
   const settingOwnerInput = document.getElementById('settingOwnerInput');
   const clearHistoryBtn  = document.getElementById('clearHistoryBtn');
+  const settingWorkspaceIdInput = document.getElementById('settingWorkspaceIdInput');
+  const copyWorkspaceIdBtn      = document.getElementById('copyWorkspaceIdBtn');
+  const switchWorkspaceIdInput  = document.getElementById('switchWorkspaceIdInput');
+  const switchWorkspaceIdBtn    = document.getElementById('switchWorkspaceIdBtn');
   const toastNotification = document.getElementById('toastNotification');
   const sidebarHistoryList = document.getElementById('sidebarHistoryList');
   const recentSessionsGrid = document.getElementById('recentSessionsGrid');
@@ -888,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openRealSession(sessionId) {
     try {
-      const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}`);
+      const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`);
       const sourceType = ['image', 'facebook'].includes(data.session.source_type) ? data.session.source_type : 'youtube';
       renderRealAnalysis(data.session, data.analysis, sourceType);
       await loadSessionMessages(sessionId);
@@ -958,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadSessionMessages(sessionId) {
     if (!sessionId) return;
-    const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}/messages`);
+    const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}/messages?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`);
     clearChatMessages();
     data.messages.forEach(message => appendMessage(message.role, message.content, message.created_at));
   }
@@ -977,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await callSessionAPI(`/${encodeURIComponent(currentSessionId)}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message, workspace_id: WORKSPACE_ID })
       });
       removeTypingState();
       appendAIMessage(data.message.content, data.message.created_at);
@@ -998,6 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   function openModal(titleText) {
     modalTitle.innerText = titleText;
+    settingWorkspaceIdInput.value = WORKSPACE_ID;
     modalBackdrop.style.display = 'flex';
   }
   function closeModal() {
@@ -1008,17 +1040,33 @@ document.addEventListener('DOMContentLoaded', () => {
   modalCloseBtn.addEventListener('click', closeModal);
   modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
 
+  copyWorkspaceIdBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(WORKSPACE_ID);
+      showToast('✅ Workspace ID copied — paste it on your other device.');
+    } catch {
+      showToast('Could not copy automatically — select and copy the ID manually.', true);
+    }
+  });
+
+  switchWorkspaceIdBtn.addEventListener('click', () => {
+    const newId = switchWorkspaceIdInput.value.trim();
+    if (!newId) {
+      showToast('⚠️ Paste a Workspace ID first.', true);
+      return;
+    }
+    try { localStorage.setItem('aica_workspace_id', newId); } catch { /* storage unavailable */ }
+    showToast('Switching workspace…');
+    setTimeout(() => location.reload(), 400);
+  });
+
   settingOwnerInput.addEventListener('change', e => {
     const newName = e.target.value.trim() || 'Abdallah';
     document.querySelectorAll('.user-name').forEach(el => el.innerText = newName);
     showToast(`Updated profile owner to ${newName}`);
   });
 
-  clearHistoryBtn.addEventListener('click', () => {
-    showToast('Cleared local session state');
-    closeModal();
-    showHomeView();
-  });
+  clearHistoryBtn.addEventListener('click', closeModal);
 
   loadRealSessions().catch(() => { /* Rendered demo content stays visible only while the API is unavailable. */ });
   setChatAvailable(false);

@@ -28,6 +28,14 @@ function invalidSession(res) {
   return res.status(400).json({ status: "error", code: "INVALID_SESSION_ID", message: "A valid session ID is required." });
 }
 
+// If a workspace_id was supplied by the caller, the loaded session must
+// belong to it — otherwise treat it as not found rather than leaking that
+// a session with this ID exists in someone else's workspace.
+function belongsToWorkspace(session, requestedWorkspaceId) {
+  if (!requestedWorkspaceId) return true; // not scoped by this caller — allow (back-compat)
+  return session.workspace_id === requestedWorkspaceId;
+}
+
 router.get("/api/sessions", async (req, res) => {
   const workspaceId = typeof req.query.workspace_id === "string" && req.query.workspace_id.trim()
     ? req.query.workspace_id.trim()
@@ -49,7 +57,9 @@ router.get("/api/sessions/:sessionId", async (req, res) => {
 
   const { data, error } = await loadSession(sessionId);
   if (error) return databaseError(res, error);
-  if (!data) return res.status(404).json({ status: "error", code: "SESSION_NOT_FOUND", message: "Session not found." });
+  if (!data || !belongsToWorkspace(data, req.query.workspace_id)) {
+    return res.status(404).json({ status: "error", code: "SESSION_NOT_FOUND", message: "Session not found." });
+  }
   return res.json({ status: "ok", session: data, analysis: data.analysis || {} });
 });
 
@@ -59,7 +69,9 @@ router.get("/api/sessions/:sessionId/messages", async (req, res) => {
 
   const { data: session, error: sessionError } = await loadSession(sessionId);
   if (sessionError) return databaseError(res, sessionError);
-  if (!session) return res.status(404).json({ status: "error", code: "SESSION_NOT_FOUND", message: "Session not found." });
+  if (!session || !belongsToWorkspace(session, req.query.workspace_id)) {
+    return res.status(404).json({ status: "error", code: "SESSION_NOT_FOUND", message: "Session not found." });
+  }
 
   const { data, error } = await supabase
     .from("content_messages")
@@ -78,7 +90,9 @@ router.post("/api/sessions/:sessionId/chat", async (req, res) => {
 
   const { data: session, error: sessionError } = await loadSession(sessionId);
   if (sessionError) return databaseError(res, sessionError);
-  if (!session) return res.status(404).json({ status: "error", code: "SESSION_NOT_FOUND", message: "Session not found." });
+  if (!session || !belongsToWorkspace(session, req.body?.workspace_id)) {
+    return res.status(404).json({ status: "error", code: "SESSION_NOT_FOUND", message: "Session not found." });
+  }
 
   const { data: previousMessages, error: messagesError } = await supabase
     .from("content_messages")

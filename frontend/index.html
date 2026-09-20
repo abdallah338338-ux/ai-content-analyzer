@@ -645,7 +645,18 @@
         </div>
         <div class="modal-field">
           <label>Workspace Access ID</label>
-          <input type="text" value="ABD-7842-9901" readonly class="modal-input" style="opacity: 0.7;">
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="settingWorkspaceIdInput" readonly class="modal-input" style="opacity: 0.85; letter-spacing: 1px;">
+            <button id="copyWorkspaceIdBtn" type="button" class="analyze-submit-btn" style="padding: 10px 14px;">Copy</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin-top:6px;">This ID is private to your device. To see the same sessions on another device, paste this ID there instead of the one it generated.</p>
+        </div>
+        <div class="modal-field">
+          <label>Switch to a Different Workspace ID</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="switchWorkspaceIdInput" placeholder="Paste a Workspace ID…" class="modal-input">
+            <button id="switchWorkspaceIdBtn" type="button" class="analyze-submit-btn" style="padding: 10px 14px;">Switch</button>
+          </div>
         </div>
         <div class="modal-field">
           <label>Default Analysis Mode</label>
@@ -656,7 +667,7 @@
           </select>
         </div>
         <div class="modal-field">
-          <button id="clearHistoryBtn" class="danger-btn">Clear Local Mock Sessions</button>
+          <button id="clearHistoryBtn" class="danger-btn">Close Panel</button>
         </div>
       </div>
     </div>
