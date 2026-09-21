@@ -69,8 +69,9 @@ router.post("/api/analyze/url", async (req, res) => {
     let tempVideoPath = null;
 
     try {
-      const oembed = await fetchFacebookOembed(url);
-
+      // Do NOT make oEmbed a hard dependency. Facebook can reject the
+      // oEmbed endpoint even when the public page itself is reachable.
+      // Full analysis only needs a directly accessible public media file.
       const resolved = await fetchPublicFacebookVideo(
         url,
         (body, meta) => writeResponseBodyToTempFile(body, meta)
@@ -84,6 +85,14 @@ router.post("/api/analyze/url", async (req, res) => {
         "facebook-video",
         analysis_mode
       );
+
+      // Metadata is best-effort only; it must never block real video analysis.
+      let oembed = {};
+      try {
+        oembed = await fetchFacebookOembed(url);
+      } catch (metadataError) {
+        console.warn("[facebook] oEmbed metadata unavailable:", metadataError.message || metadataError);
+      }
 
       const sessionTitle = analysisResult.title || oembed.title || "Facebook Video";
 
