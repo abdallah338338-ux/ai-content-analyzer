@@ -4,7 +4,7 @@ import fsPromises from "fs/promises";
 import os from "os";
 import path from "path";
 import { analyzeYouTubeVideo } from "../services/gemini.js";
-import { isFacebookUrl, fetchFacebookOembed, fetchPublicFacebookVideo, buildFacebookAnalysis } from "../services/facebookOembed.js";
+import { isFacebookUrl, fetchFacebookOembed, fetchPublicFacebookVideo } from "../services/facebookOembed.js";
 import { analyzeVideoFile } from "../services/gemini.js";
 import { supabase } from "../lib/supabaseClient.js";
 
