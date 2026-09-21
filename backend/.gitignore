@@ -12,3 +12,6 @@ npm-debug.log*
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Runtime-downloaded tools
+bin/
