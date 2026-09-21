@@ -1,4 +1,4 @@
-import { GoogleGenAI, MediaResolution } from "@google/genai";
+import { GoogleGenAI, MediaResolution, createUserContent, createPartFromUri } from "@google/genai";
 
 function normalizeSchema(data) {
   return {
@@ -84,6 +84,115 @@ export async function analyzeImage(buffer, mimeType, analysisMode = "full") {
     throw { code: error.code || "GEMINI_REQUEST_FAILED", message: safeMessage };
   }
 }
+export async function analyzeVideoFile(filePath, mimeType, fileName, analysisMode = "full") {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw {
+      code: "GEMINI_KEY_MISSING",
+      message: "GEMINI_API_KEY environment variable is not configured.",
+    };
+  }
+
+  if (!filePath || !mimeType) {
+    throw {
+      code: "INVALID_VIDEO_FILE",
+      message: "A video file path and MIME type are required.",
+    };
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  let uploadedFile = null;
+
+  const prompt = "Analyze the uploaded video file \"" + (fileName || "video") + "\" and return ONLY valid raw JSON with this schema: { \"title\":\"\", \"overview\":\"\", \"key_points\":[], \"timeline\":[{\"start\":\"00:00\",\"end\":\"00:00\",\"topic\":\"\",\"summary\":\"\"}], \"speech_analysis\":\"\", \"visual_analysis\":\"\", \"structure\":\"\", \"evidence_notes\":[], \"entities\":[], \"uncertainties\":[] }. Analyze both spoken/audio content and visual content. Build a useful timestamped timeline when possible. Do not invent facts, timestamps, names, or on-screen text. If an exact URL, website address, program/app/browser-extension name, file name, or button/menu label is clearly visible, transcribe it EXACTLY character-for-character into evidence_notes with its approximate timestamp. If such text is blurry, cut off, too small, or otherwise uncertain, say so in uncertainties instead of guessing. Analysis mode: " + analysisMode + ".";
+
+  try {
+    uploadedFile = await ai.files.upload({
+      file: filePath,
+      config: { mimeType },
+    });
+
+    if (!uploadedFile?.name || !uploadedFile?.uri || !uploadedFile?.mimeType) {
+      throw {
+        code: "VIDEO_FILE_UPLOAD_FAILED",
+        message: "Gemini did not return a usable uploaded file reference.",
+      };
+    }
+
+    const processingStartedAt = Date.now();
+    const maxProcessingMs = 10 * 60 * 1000;
+    let fileState = uploadedFile;
+
+    while (fileState.state && fileState.state.toString() !== "ACTIVE") {
+      if (fileState.state.toString() === "FAILED") {
+        throw {
+          code: "VIDEO_FILE_PROCESSING_FAILED",
+          message: "Gemini failed to process the uploaded video.",
+        };
+      }
+
+      if (Date.now() - processingStartedAt >= maxProcessingMs) {
+        throw {
+          code: "VIDEO_FILE_PROCESSING_TIMEOUT",
+          message: "Gemini video processing timed out.",
+        };
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      fileState = await ai.files.get({ name: uploadedFile.name });
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: createUserContent([
+        prompt,
+        createPartFromUri(fileState.uri, fileState.mimeType),
+      ]),
+      config: { mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH },
+    });
+
+    let rawText = response.text ? response.text.trim() : "";
+
+    if (!rawText) {
+      throw {
+        code: "GEMINI_INVALID_RESPONSE",
+        message: "Gemini returned an empty video analysis response.",
+      };
+    }
+
+    if (rawText.startsWith("```")) {
+      rawText = rawText.replace(/^```(?:json)?\\n?/, "").replace(/\\n?```$/, "").trim();
+    }
+
+    try {
+      return normalizeSchema(JSON.parse(rawText));
+    } catch {
+      throw {
+        code: "GEMINI_INVALID_RESPONSE",
+        message: "Failed to parse structured JSON response from Gemini model.",
+      };
+    }
+  } catch (error) {
+    console.error("[gemini] Error analyzing video file:", error.message || error);
+
+    let safeMessage = error.message || "Unable to analyze video file.";
+    safeMessage = safeMessage.replaceAll(apiKey, "[REDACTED]");
+
+    throw {
+      code: error.code || "VIDEO_ANALYSIS_FAILED",
+      message: safeMessage,
+    };
+  } finally {
+    if (uploadedFile?.name) {
+      try {
+        await ai.files.delete({ name: uploadedFile.name });
+      } catch (cleanupError) {
+        console.error("[gemini] Failed to delete temporary Gemini file:", cleanupError.message || cleanupError);
+      }
+    }
+  }
+}
+
 export async function analyzeYouTubeVideo(url, analysisMode = "full") {
   const apiKey = process.env.GEMINI_API_KEY;
 
