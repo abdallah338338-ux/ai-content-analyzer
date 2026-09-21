@@ -659,6 +659,65 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // -------------------------------------------------------------------------
+  // 8c. API Call — POST /api/analyze/video
+  // -------------------------------------------------------------------------
+  async function callAnalyzeVideoAPI(file) {
+    if (!file) throw new Error('Please choose a video file first.');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
+
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('workspace_id', currentWorkspaceId || WORKSPACE_ID);
+    formData.append('analysis_mode', 'full');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/analyze/video`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const code = data.code || '';
+        if (code === 'INVALID_VIDEO') {
+          throw new Error(data.message || 'Please choose a video file.');
+        }
+        if (code === 'UNSUPPORTED_VIDEO_TYPE') {
+          throw new Error(data.message || 'This video format is not supported. Use MP4, WebM, MOV, MPEG, MKV, or OGG.');
+        }
+        if (code === 'VIDEO_TOO_LARGE') {
+          throw new Error(data.message || 'The video is larger than the free 150 MB upload limit.');
+        }
+        if (response.status === 503) {
+          throw new Error('The analysis server is starting up (Render cold start). Please wait 30 seconds and try again.');
+        }
+        throw new Error(data.message || `Server error (${response.status}). Please try again.`);
+      }
+
+      if (data.status !== 'ok' || !data.analysis || !data.session) {
+        throw new Error('Received an unexpected response from the server. Please try again.');
+      }
+
+      return data;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error('Video analysis timed out after 5 minutes. Try a shorter/smaller video.');
+      }
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        throw new Error('Cannot reach the analysis server. Check your internet connection or try again in a moment.');
+      }
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // 9. Analyze Submit Handler (REAL API)
   // -------------------------------------------------------------------------
   async function handleAnalyzeSubmit() {
