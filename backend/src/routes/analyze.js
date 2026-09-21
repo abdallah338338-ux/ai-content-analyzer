@@ -6,6 +6,7 @@ import path from "path";
 import { analyzeYouTubeVideo } from "../services/gemini.js";
 import { isFacebookUrl, fetchFacebookOembed, fetchPublicFacebookVideo } from "../services/facebookOembed.js";
 import { analyzeVideoFile } from "../services/gemini.js";
+import { downloadFacebookVideoWithYtDlp } from "../services/facebookDownloader.js";
 import { supabase } from "../lib/supabaseClient.js";
 
 const router = Router();
@@ -72,10 +73,25 @@ router.post("/api/analyze/url", async (req, res) => {
       // Do NOT make oEmbed a hard dependency. Facebook can reject the
       // oEmbed endpoint even when the public page itself is reachable.
       // Full analysis only needs a directly accessible public media file.
-      const resolved = await fetchPublicFacebookVideo(
-        url,
-        (body, meta) => writeResponseBodyToTempFile(body, meta)
-      );
+      let resolved;
+      try {
+        resolved = await fetchPublicFacebookVideo(
+          url,
+          (body, meta) => writeResponseBodyToTempFile(body, meta)
+        );
+      } catch (directError) {
+        console.warn(
+          "[facebook] direct public-media resolver failed; trying yt-dlp fallback:",
+          directError?.code || directError?.message || directError
+        );
+
+        const downloaded = await downloadFacebookVideoWithYtDlp(url);
+        resolved = {
+          ...downloaded,
+          normalizedUrl: url,
+          pageUrl: url,
+        };
+      }
 
       tempVideoPath = resolved.filePath;
 
@@ -106,7 +122,9 @@ router.post("/api/analyze/url", async (req, res) => {
         metadata: {
           analyzed_at: new Date().toISOString(),
           provider_name: oembed.provider_name || "Facebook",
-          facebook_resolution: "public-direct-media",
+          facebook_resolution: resolved.downloader === "yt-dlp"
+            ? "yt-dlp-public-download"
+            : "public-direct-media",
           resolved_mime_type: resolved.mimeType,
         },
       });
@@ -136,6 +154,9 @@ router.post("/api/analyze/url", async (req, res) => {
       const fallbackCodes = new Set([
         "FACEBOOK_DIRECT_VIDEO_UNAVAILABLE",
         "FACEBOOK_VIDEO_DOWNLOAD_FAILED",
+        "FACEBOOK_DOWNLOADER_UNAVAILABLE",
+        "FACEBOOK_DOWNLOADER_FAILED",
+        "FACEBOOK_DOWNLOADER_TIMEOUT",
         "FACEBOOK_VIDEO_TOO_LARGE",
         "FACEBOOK_PAGE_UNAVAILABLE",
         "FACEBOOK_PAGE_UNREACHABLE",
@@ -152,7 +173,7 @@ router.post("/api/analyze/url", async (req, res) => {
         code: err.code || "FACEBOOK_ANALYSIS_FAILED",
         message:
           err.message ||
-          "Facebook full video analysis could not be completed. Upload the video file directly if the public page does not expose a processable video.",
+          "Facebook full video analysis could not be completed. If the public video cannot be extracted automatically, upload the video file directly.",
       });
     } finally {
       if (tempVideoPath) {
