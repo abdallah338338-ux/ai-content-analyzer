@@ -590,6 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (code === 'INVALID_URL')          throw new Error('Invalid URL. Please enter a valid link.');
         if (code === 'UNSUPPORTED_SOURCE')   throw new Error('Only public YouTube and Facebook URLs are supported.');
         if (code === 'FACEBOOK_OEMBED_FAILED' || code === 'FACEBOOK_OEMBED_UNREACHABLE') throw new Error(data.message || 'This Facebook link is not publicly accessible.');
+        if (code === 'FACEBOOK_DIRECT_VIDEO_UNAVAILABLE' || code === 'FACEBOOK_VIDEO_DOWNLOAD_FAILED' || code === 'FACEBOOK_PAGE_UNAVAILABLE' || code === 'FACEBOOK_PAGE_UNREACHABLE') throw new Error(data.message || 'Facebook did not expose a processable public video file. Upload the video directly for full analysis.');
+        if (code === 'FACEBOOK_VIDEO_TOO_LARGE') throw new Error(data.message || 'This Facebook video is larger than the free 150 MB limit.');
         if (response.status === 503)         throw new Error('The analysis server is starting up (Render cold start). Please wait 30 seconds and try again.');
         throw new Error(data.message || `Server error (${response.status}). Please try again.`);
       }
@@ -758,7 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadSessionMessages(result.session.id);
         await loadRealSessions();
         showAnalysisView();
-        showToast('✅ Metadata retrieved. Upload the video file for full analysis.');
+        showToast('✅ Facebook video fully analyzed!');
       } catch (err) {
         showHomeView();
         showToast(`❌ ${err.message}`, true);
