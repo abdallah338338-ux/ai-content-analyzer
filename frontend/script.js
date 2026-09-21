@@ -564,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   async function callAnalyzeAPI(youtubeUrl) {
     const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+    const timeoutId  = setTimeout(() => controller.abort(), 300000); // 5 min timeout
 
     try {
       const response = await fetch(ANALYZE_URL, {
@@ -590,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (code === 'INVALID_URL')          throw new Error('Invalid URL. Please enter a valid link.');
         if (code === 'UNSUPPORTED_SOURCE')   throw new Error('Only public YouTube and Facebook URLs are supported.');
         if (code === 'FACEBOOK_OEMBED_FAILED' || code === 'FACEBOOK_OEMBED_UNREACHABLE') throw new Error(data.message || 'This Facebook link is not publicly accessible.');
-        if (code === 'FACEBOOK_DIRECT_VIDEO_UNAVAILABLE' || code === 'FACEBOOK_VIDEO_DOWNLOAD_FAILED' || code === 'FACEBOOK_PAGE_UNAVAILABLE' || code === 'FACEBOOK_PAGE_UNREACHABLE') throw new Error(data.message || 'Facebook did not expose a processable public video file. Upload the video directly for full analysis.');
+        if (code === 'FACEBOOK_DIRECT_VIDEO_UNAVAILABLE' || code === 'FACEBOOK_VIDEO_DOWNLOAD_FAILED' || code === 'FACEBOOK_DOWNLOADER_UNAVAILABLE' || code === 'FACEBOOK_DOWNLOADER_FAILED' || code === 'FACEBOOK_DOWNLOADER_TIMEOUT' || code === 'FACEBOOK_PAGE_UNAVAILABLE' || code === 'FACEBOOK_PAGE_UNREACHABLE') throw new Error(data.message || 'Facebook did not expose a processable public video file. Upload the video directly for full analysis.');
         if (code === 'FACEBOOK_VIDEO_TOO_LARGE') throw new Error(data.message || 'This Facebook video is larger than the free 150 MB limit.');
         if (response.status === 503)         throw new Error('The analysis server is starting up (Render cold start). Please wait 30 seconds and try again.');
         throw new Error(data.message || `Server error (${response.status}). Please try again.`);
@@ -605,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
-        throw new Error('Request timed out. Gemini analysis can take up to 2 minutes. Please try again.');
+        throw new Error('Request timed out. Facebook video extraction + Gemini analysis can take up to 5 minutes. Please try again.');
       }
       if (err.name === 'TypeError' && err.message.includes('fetch')) {
         throw new Error('Cannot reach the analysis server. Check your internet connection or try again in a moment.');
