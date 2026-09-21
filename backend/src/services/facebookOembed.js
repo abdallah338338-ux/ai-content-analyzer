@@ -139,86 +139,125 @@ function extensionForMime(mime) {
 }
 
 export async function fetchPublicFacebookVideo(url, writeStreamFactory) {
+  const parsed = new URL(url);
   const normalizedUrl = normalizeFacebookUrl(url);
-  let response;
-  try {
-    response = await fetch(normalizedUrl, {
-      redirect: "follow",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-      },
-    });
-  } catch {
+
+  // Facebook can serve different HTML depending on the host/device and can
+  // reject one public URL variant while serving another. We only try public
+  // page variants; no login, cookies, private APIs, or access-control bypass.
+  const variants = [];
+  const addVariant = (candidate) => {
+    if (candidate && !variants.includes(candidate)) variants.push(candidate);
+  };
+
+  addVariant(url);
+  addVariant(normalizedUrl);
+
+  for (const host of ["www.facebook.com", "m.facebook.com", "web.facebook.com"]) {
+    const variant = new URL(normalizedUrl);
+    variant.hostname = host;
+    addVariant(variant.toString());
+  }
+
+  // Keep the original query on the desktop URL as a last-resort variant,
+  // because some Reel/share links use it during Facebook's public redirect.
+  const originalDesktop = new URL(url);
+  originalDesktop.hostname = "www.facebook.com";
+  addVariant(originalDesktop.toString());
+
+  let lastPageStatus = null;
+  let lastPageError = null;
+
+  for (const pageUrl of variants) {
+    let response;
+    try {
+      response = await fetch(pageUrl, {
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            pageUrl.includes("m.facebook.com")
+              ? "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/153 Mobile Safari/537.36"
+              : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      });
+    } catch (error) {
+      lastPageError = error;
+      continue;
+    }
+
+    lastPageStatus = response.status;
+
+    if (!response.ok) continue;
+
+    const html = await response.text();
+    const candidates = extractCandidates(html);
+
+    if (!candidates.length) continue;
+
+    for (const candidate of candidates) {
+      let mediaResponse;
+      try {
+        mediaResponse = await fetch(candidate, {
+          redirect: "follow",
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36",
+            "Accept": "video/*,*/*;q=0.8",
+          },
+        });
+      } catch {
+        continue;
+      }
+
+      if (!mediaResponse.ok || !mediaResponse.body) continue;
+
+      const mimeType =
+        (mediaResponse.headers.get("content-type") || "")
+          .split(";")[0]
+          .toLowerCase();
+
+      if (!VIDEO_MIMES.has(mimeType)) continue;
+
+      const lengthHeader = mediaResponse.headers.get("content-length");
+      const declaredLength = Number(lengthHeader);
+      if (Number.isFinite(declaredLength) && declaredLength > MAX_BYTES) continue;
+
+      const filePath = await writeStreamFactory(mediaResponse.body, {
+        mimeType,
+        extension: extensionForMime(mimeType),
+        maxBytes: MAX_BYTES,
+      });
+
+      return {
+        filePath,
+        mimeType,
+        sourceUrl: candidate,
+        normalizedUrl,
+        pageUrl,
+      };
+    }
+  }
+
+  if (lastPageStatus) {
+    throw {
+      code: "FACEBOOK_PAGE_UNAVAILABLE",
+      message: `Facebook returned HTTP ${lastPageStatus} for this public link from the analysis server.`,
+    };
+  }
+
+  if (lastPageError) {
     throw {
       code: "FACEBOOK_PAGE_UNREACHABLE",
       message: "Facebook's public video page could not be reached from the analysis server.",
     };
   }
 
-  if (!response.ok) {
-    throw {
-      code: "FACEBOOK_PAGE_UNAVAILABLE",
-      message: `Facebook returned HTTP ${response.status} for this public link.`,
-    };
-  }
-
-  const html = await response.text();
-  const candidates = extractCandidates(html);
-
-  if (!candidates.length) {
-    throw {
-      code: "FACEBOOK_DIRECT_VIDEO_UNAVAILABLE",
-      message:
-        "Facebook confirmed the public link, but the page did not expose a direct video file that this free server can process. Upload the video file directly for full analysis.",
-    };
-  }
-
-  for (const candidate of candidates) {
-    let mediaResponse;
-    try {
-      mediaResponse = await fetch(candidate, {
-        redirect: "follow",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36",
-          "Accept": "video/*,*/*;q=0.8",
-        },
-      });
-    } catch {
-      continue;
-    }
-
-    if (!mediaResponse.ok || !mediaResponse.body) continue;
-
-    const mimeType =
-      (mediaResponse.headers.get("content-type") || "").split(";")[0].toLowerCase();
-
-    if (!VIDEO_MIMES.has(mimeType)) continue;
-
-    const lengthHeader = mediaResponse.headers.get("content-length");
-    const declaredLength = Number(lengthHeader);
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_BYTES) {
-      continue;
-    }
-
-    const filePath = await writeStreamFactory(mediaResponse.body, {
-      mimeType,
-      extension: extensionForMime(mimeType),
-      maxBytes: MAX_BYTES,
-    });
-
-    return {
-      filePath,
-      mimeType,
-      sourceUrl: candidate,
-      normalizedUrl,
-    };
-  }
-
   throw {
-    code: "FACEBOOK_VIDEO_DOWNLOAD_FAILED",
+    code: "FACEBOOK_DIRECT_VIDEO_UNAVAILABLE",
     message:
-      "A public Facebook media URL was found, but the video file could not be downloaded in a supported format under the free 150 MB limit.",
+      "Facebook's public page was reachable, but it did not expose a directly processable video file. Upload the video file directly for full analysis.",
   };
 }
 
