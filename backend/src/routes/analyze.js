@@ -1,6 +1,11 @@
 import { Router } from "express";
+import fs from "fs";
+import fsPromises from "fs/promises";
+import os from "os";
+import path from "path";
 import { analyzeYouTubeVideo } from "../services/gemini.js";
-import { isFacebookUrl, fetchFacebookOembed, buildFacebookAnalysis } from "../services/facebookOembed.js";
+import { isFacebookUrl, fetchFacebookOembed, fetchPublicFacebookVideo, buildFacebookAnalysis } from "../services/facebookOembed.js";
+import { analyzeVideoFile } from "../services/gemini.js";
 import { supabase } from "../lib/supabaseClient.js";
 
 const router = Router();
@@ -59,12 +64,28 @@ router.post("/api/analyze/url", async (req, res) => {
     });
   }
 
-  // --- Facebook: metadata-only via official tokenless oEmbed API ---
+  // --- Facebook: try real public video analysis first; never fake an analysis ---
   if (isFacebookUrl(url)) {
+    let tempVideoPath = null;
+
     try {
       const oembed = await fetchFacebookOembed(url);
-      const analysisResult = buildFacebookAnalysis(oembed, url);
-      const sessionTitle = analysisResult.title;
+
+      const resolved = await fetchPublicFacebookVideo(
+        url,
+        (body, meta) => writeResponseBodyToTempFile(body, meta)
+      );
+
+      tempVideoPath = resolved.filePath;
+
+      const analysisResult = await analyzeVideoFile(
+        tempVideoPath,
+        resolved.mimeType,
+        "facebook-video",
+        analysis_mode
+      );
+
+      const sessionTitle = analysisResult.title || oembed.title || "Facebook Video";
 
       let sessionRecord = await persistSession({
         workspace_id,
@@ -75,8 +96,9 @@ router.post("/api/analyze/url", async (req, res) => {
         analysisResult,
         metadata: {
           analyzed_at: new Date().toISOString(),
-          oembed_html: oembed.html || null,
           provider_name: oembed.provider_name || "Facebook",
+          facebook_resolution: "public-direct-media",
+          resolved_mime_type: resolved.mimeType,
         },
       });
 
@@ -94,14 +116,39 @@ router.post("/api/analyze/url", async (req, res) => {
         };
       }
 
-      return res.status(200).json({ status: "ok", session: sessionRecord, analysis: analysisResult });
+      return res.status(200).json({
+        status: "ok",
+        session: sessionRecord,
+        analysis: analysisResult,
+      });
     } catch (err) {
       console.error("[analyze/url:facebook] Error:", err);
-      return res.status(err.code === "FACEBOOK_OEMBED_UNREACHABLE" ? 502 : 400).json({
+
+      const fallbackCodes = new Set([
+        "FACEBOOK_DIRECT_VIDEO_UNAVAILABLE",
+        "FACEBOOK_VIDEO_DOWNLOAD_FAILED",
+        "FACEBOOK_VIDEO_TOO_LARGE",
+        "FACEBOOK_PAGE_UNAVAILABLE",
+        "FACEBOOK_PAGE_UNREACHABLE",
+      ]);
+
+      return res.status(
+        err.code === "FACEBOOK_OEMBED_UNREACHABLE" || err.code === "FACEBOOK_PAGE_UNREACHABLE"
+          ? 502
+          : fallbackCodes.has(err.code)
+            ? 422
+            : 400
+      ).json({
         status: "error",
-        code: err.code || "FACEBOOK_OEMBED_FAILED",
-        message: err.message || "Unable to fetch this Facebook link's metadata.",
+        code: err.code || "FACEBOOK_ANALYSIS_FAILED",
+        message:
+          err.message ||
+          "Facebook full video analysis could not be completed. Upload the video file directly if the public page does not expose a processable video.",
       });
+    } finally {
+      if (tempVideoPath) {
+        await fsPromises.unlink(tempVideoPath).catch(() => {});
+      }
     }
   }
 
