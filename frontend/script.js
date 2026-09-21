@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentWorkspaceId = WORKSPACE_ID;
   let isAnalyzing     = false;      // duplicate-request guard
   let selectedImageFile = null;     // file picked in the image dropzone, awaiting analysis
+  let selectedVideoFile = null;     // file picked in the video dropzone, awaiting analysis
 
   // -------------------------------------------------------------------------
   // Mock Dataset — kept for sidebar demo history; NEVER shown after real API
@@ -166,6 +167,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const imageFileInput = document.getElementById('imageFileInput');
   const dropzoneText   = document.getElementById('dropzoneText');
   const analyzeImageBtn = document.getElementById('analyzeImageBtn');
+  const videoDropzone = document.getElementById('videoDropzone');
+  const videoFileInput = document.getElementById('videoFileInput');
+  const videoDropzoneText = document.getElementById('videoDropzoneText');
+  const analyzeVideoBtn = document.getElementById('analyzeVideoBtn');
 
   const sessionHeaderTitle = document.getElementById('sessionHeaderTitle');
   const sessionHeaderDesc  = document.getElementById('sessionHeaderDesc');
@@ -690,6 +695,45 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // — Uploaded video tab —
+    if (activeTab === 'video') {
+      if (!selectedVideoFile) {
+        showToast('⚠️ Please choose a video first.', true);
+        return;
+      }
+      if (selectedVideoFile.size > 150 * 1024 * 1024) {
+        showToast('⚠️ Free cloud upload limit is 150 MB.', true);
+        return;
+      }
+      if (isAnalyzing) {
+        showToast('Analysis already in progress, please wait…');
+        return;
+      }
+
+      isAnalyzing = true;
+      setAnalyzeButtonState(true);
+      showLoadingView();
+
+      try {
+        const result = await callAnalyzeVideoAPI(selectedVideoFile);
+        const localThumb = URL.createObjectURL(selectedVideoFile);
+
+        renderRealAnalysis(result.session, result.analysis, 'video', localThumb);
+        await loadSessionMessages(result.session.id);
+        await loadRealSessions();
+        showAnalysisView();
+        showToast('✅ Video analysis complete!');
+
+      } catch (err) {
+        showHomeView();
+        showToast(`❌ ${err.message}`, true);
+      } finally {
+        isAnalyzing = false;
+        setAnalyzeButtonState(false);
+      }
+      return;
+    }
+
     // — Facebook tab —
     if (activeTab === 'facebook') {
       const fbVal = urlInputField.value.trim();
@@ -804,6 +848,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   navNewAnalysisBtn.addEventListener('click', () => {
     urlInputField.value = '';
+    selectedVideoFile = null;
+    selectedImageFile = null;
+    if (videoFileInput) videoFileInput.value = '';
+    if (imageFileInput) imageFileInput.value = '';
     currentSessionId = null;
     clearChatMessages();
     setChatAvailable(false);
@@ -854,10 +902,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (activeTab === 'image') {
         inputActionCard.style.display = 'none';
-        imageDropzone.classList.add('active-tab');
+        imageDropzone.style.display = 'block';
+        videoDropzone.style.display = 'none';
+      } else if (activeTab === 'video') {
+        inputActionCard.style.display = 'none';
+        imageDropzone.style.display = 'none';
+        videoDropzone.style.display = 'block';
       } else {
         inputActionCard.style.display = 'flex';
-        imageDropzone.classList.remove('active-tab');
+        imageDropzone.style.display = 'none';
+        videoDropzone.style.display = 'none';
 
         if (activeTab === 'youtube') {
           urlInputField.placeholder = 'Paste YouTube URL (e.g. https://youtube.com/watch?v=...)';
@@ -868,6 +922,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     });
+  });
+
+  // Uploaded Video Dropzone
+  videoDropzone.addEventListener('click', event => {
+    if (event.target === analyzeVideoBtn || analyzeVideoBtn.contains(event.target)) return;
+    videoFileInput.click();
+  });
+
+  videoFileInput.addEventListener('change', event => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      selectedVideoFile = file;
+      const sizeMB = file.size / (1024 * 1024);
+      videoDropzoneText.innerHTML =
+        `<h4>Selected: ${escapeHTML(file.name)}</h4><p>${sizeMB.toFixed(1)} MB — ready to analyze.</p>`;
+    }
+  });
+
+  analyzeVideoBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    handleAnalyzeSubmit();
   });
 
   // Image Dropzone
@@ -893,6 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function sourceBadge(sourceType) {
     if (sourceType === 'image') return { cls: 'image', label: '🖼️ Image' };
     if (sourceType === 'facebook') return { cls: 'facebook', label: '🔵 Facebook' };
+    if (sourceType === 'video') return { cls: 'video', label: '🎬 Video File' };
     return { cls: 'youtube', label: '🔴 YouTube' };
   }
 
@@ -920,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openRealSession(sessionId) {
     try {
       const data = await callSessionAPI(`/${encodeURIComponent(sessionId)}?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`);
-      const sourceType = ['image', 'facebook'].includes(data.session.source_type) ? data.session.source_type : 'youtube';
+      const sourceType = ['image', 'facebook', 'video'].includes(data.session.source_type) ? data.session.source_type : 'youtube';
       renderRealAnalysis(data.session, data.analysis, sourceType);
       await loadSessionMessages(sessionId);
       await loadRealSessions();
