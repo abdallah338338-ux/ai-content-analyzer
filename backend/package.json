@@ -4,7 +4,8 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "postinstall": "node scripts/ensureYtDlp.js"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",
