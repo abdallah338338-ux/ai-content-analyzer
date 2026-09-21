@@ -2027,3 +2027,41 @@ NEXT STEP = PHASE 2 — YOUTUBE MVP
 ---
 
 # نهاية AI Content Analyzer Master Roadmap
+
+
+---
+
+## 2026-09-21 — Free Uploaded Video Implementation Update
+
+### What was implemented
+- Added `POST /api/analyze/video`.
+- Added temporary video upload handling with Multer + the Render ephemeral filesystem.
+- Added Gemini File API processing through `analyzeVideoFile()`.
+- The route analyzes both audio/speech and visual content and returns the existing 10-field structured analysis schema.
+- Added persistent `content_sessions` and `content_assets` records for uploaded-video sessions.
+- Raw uploaded videos are intentionally **not** persisted in Supabase Storage in the free architecture. The temporary Render file is deleted after processing.
+- Added a new **Upload Video** source tab to the frontend.
+- Added frontend video upload, validation, loading state, local preview, session rendering, and chat reuse.
+- Added Video File to session badges/history.
+
+### Free-tier design constraints
+- Render Free currently provides 512 MB RAM and an ephemeral filesystem; raw files are therefore temporary. Free services can also spin down after 15 minutes of inactivity.
+- Supabase Free Storage has a 1 GB quota and a 50 MB maximum file-size setting, so the uploaded-video V1 deliberately avoids storing the raw video in Supabase.
+- Gemini File API supports up to 2 GB per file on the free tier, but this app's free Render deployment caps browser uploads at **150 MB** as a practical limit.
+- Recommended user format for faster upload and good visual readability: MP4 with H.264 video + AAC audio, preferably 720p.
+- No automatic server-side transcoding was added because that would add substantial CPU/storage overhead to the free Render service. The UI instead recommends a compressed MP4 before upload.
+
+### Facebook status
+A Facebook URL alone is still **not** treated as full video analysis. The current Facebook URL route is metadata/oEmbed only. Full multimodal Facebook analysis requires the user to provide the actual video file through an allowed/public mechanism. The app must never bypass login, privacy controls, cookies, or access restrictions.
+
+### Verification status
+- YouTube URL analysis: production verified.
+- Content sessions + chat: production verified.
+- Uploaded image backend: implemented; production verification remains separate.
+- Uploaded video route + frontend: implemented in GitHub; **production live test is still required**.
+- Facebook full video analysis from URL: not implemented because a public, permitted video-file retrieval path is not guaranteed.
+- Auth/rate limiting/PWA final verification remain separate hardening tasks.
+
+### Important operational limitation
+The free architecture is suitable for a personal/hobby deployment, not guaranteed 24/7 production. Render Free may sleep/restart, and long video analysis can exceed practical request/runtime limits. For reliable long-running jobs, a paid/background-worker architecture would eventually be appropriate.
+
