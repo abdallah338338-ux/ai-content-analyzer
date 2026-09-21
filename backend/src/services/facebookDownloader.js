@@ -3,9 +3,10 @@ import path from "path";
 import os from "os";
 import { spawn } from "child_process";
 import { randomUUID } from "crypto";
+import { ensureYtDlp, binaryPath } from "../../scripts/ensureYtDlp.js";
 
 const MAX_BYTES = 150 * 1024 * 1024;
-const YTDLP_PATH = path.resolve(process.cwd(), "bin", "yt-dlp");
+const YTDLP_PATH = binaryPath;
 
 function runYtDlp(args, timeoutMs = 180000) {
   return new Promise((resolve, reject) => {
@@ -41,10 +42,12 @@ async function findDownloadedFile(prefix) {
 }
 
 export async function downloadFacebookVideoWithYtDlp(url) {
-  try {
-    await fs.access(YTDLP_PATH);
-  } catch {
-    throw { code: "FACEBOOK_DOWNLOADER_UNAVAILABLE", message: "The server video downloader is not installed." };
+  const ready = await ensureYtDlp();
+  if (!ready) {
+    throw {
+      code: "FACEBOOK_DOWNLOADER_UNAVAILABLE",
+      message: "The server video downloader could not be installed automatically."
+    };
   }
 
   const prefix = `aica-fb-${randomUUID()}`;
