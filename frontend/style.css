@@ -546,6 +546,44 @@ input, textarea, select {
   transform: scale(1.02);
 }
 
+/* Drag & Drop Dropzone for Video */
+.video-dropzone {
+  display: none;
+  border: 2px dashed var(--border-focus);
+  border-radius: var(--radius-md);
+  padding: 36px 20px;
+  text-align: center;
+  background-color: var(--bg-input);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  min-height: 190px;
+}
+
+.video-dropzone:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--accent-blue);
+  transform: translateY(-1px);
+}
+
+.video-dropzone .dropzone-icon {
+  background-color: rgba(167, 139, 250, 0.12);
+  color: #A78BFA;
+}
+
+.video-dropzone .dropzone-text h4 {
+  color: var(--text-primary);
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.video-dropzone .dropzone-text p {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 /* Drag & Drop Dropzone for Image */
 .image-dropzone {
   display: none;
